@@ -1,7 +1,35 @@
-opencv-python>=4.5.0
+# Core libraries
 numpy>=1.20.0
+scipy>=1.7.0
 matplotlib>=3.4.0
-Pillow>=8.0.0
-scipy>=1.6.0
+pillow>=8.0.0
+pandas>=1.3.0
+
+# Deep learning
+torch>=1.9.0
+torchvision>=0.10.0
+ultralytics>=8.0.0  # For YOLOv8
+tensorboard>=2.5.0  # For logging
+
+# Computer vision
+opencv-python>=4.5.0
+opencv-contrib-python>=4.5.0
+
+# Stream handling
+ffmpeg-python>=0.2.0
+av>=9.0.0  # PyAv for fast video decoding
+
+# Image processing and data handling
+albumentations>=1.0.0  # For data augmentation
+pycocotools>=2.0.2  # For COCO format handling
+
+# Utilities
 tqdm>=4.60.0
-PyYAML>=6.0 
+pyyaml>=6.0
+scikit-learn>=1.0.0
+pytest>=6.0.0  # For testing
+
+# Optional: For Faster R-CNN implementation
+detectron2  # Comment this line if installation fails (requires separate installation)
+# Install detectron2 using: 
+# python -m pip install 'git+https://github.com/facebookresearch/detectron2.git' 
