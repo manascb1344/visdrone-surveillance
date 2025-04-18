@@ -211,9 +211,9 @@ def convert_visdrone_to_yolo(dataset_paths, output_dir='datasets/VisDrone-YOLO')
     # Create yaml file for dataset
     dataset_yaml = {
         'path': os.path.abspath(output_dir),
-        'train': 'train/images',
-        'val': 'val/images',
-        'test': 'test/images',
+        'train': 'images/train',
+        'val': 'images/val',
+        'test': 'images/test',
         'names': VISDRONE_CLASSES
     }
     
@@ -424,9 +424,9 @@ def create_visdrone_yaml(output_path, dataset_path="datasets/VisDrone-YOLO"):
     # Create config dict
     config = {
         'path': dataset_path,
-        'train': 'train/images',
-        'val': 'val/images',
-        'test': 'test/images',
+        'train': 'images/train',
+        'val': 'images/val',
+        'test': 'images/test',
         'names': class_names,
         'nc': len(class_names)
     }
@@ -458,8 +458,8 @@ def verify_dataset_structure(dataset_path, output_path=None):
         return False
     
     # Check train, val, test directories
-    required_dirs = ['train/images', 'val/images', 'test/images', 
-                     'train/labels', 'val/labels', 'test/labels']
+    required_dirs = ['images/train', 'images/val', 'images/test', 
+                     'labels/train', 'labels/val', 'labels/test']
     
     missing_dirs = []
     for dir_path in required_dirs:
@@ -471,13 +471,13 @@ def verify_dataset_structure(dataset_path, output_path=None):
         return False
     
     # Count images and labels
-    train_images = list((dataset_path / 'train/images').glob('*.jpg'))
-    val_images = list((dataset_path / 'val/images').glob('*.jpg'))
-    test_images = list((dataset_path / 'test/images').glob('*.jpg'))
+    train_images = list((dataset_path / 'images/train').glob('*.jpg'))
+    val_images = list((dataset_path / 'images/val').glob('*.jpg'))
+    test_images = list((dataset_path / 'images/test').glob('*.jpg'))
     
-    train_labels = list((dataset_path / 'train/labels').glob('*.txt'))
-    val_labels = list((dataset_path / 'val/labels').glob('*.txt'))
-    test_labels = list((dataset_path / 'test/labels').glob('*.txt'))
+    train_labels = list((dataset_path / 'labels/train').glob('*.txt'))
+    val_labels = list((dataset_path / 'labels/val').glob('*.txt'))
+    test_labels = list((dataset_path / 'labels/test').glob('*.txt'))
     
     logger.info(f"Found {len(train_images)} training images, {len(val_images)} validation images, {len(test_images)} test images")
     logger.info(f"Found {len(train_labels)} training labels, {len(val_labels)} validation labels, {len(test_labels)} test labels")
@@ -533,7 +533,7 @@ def check_visdrone_yolo_format(dataset_path):
     dataset_path = Path(dataset_path)
     
     # Check if labels directory exists and has YOLO format txt files
-    train_labels_dir = dataset_path / 'train/labels'
+    train_labels_dir = dataset_path / 'labels/train'
     if not train_labels_dir.exists():
         return False
     

@@ -4,6 +4,7 @@ import argparse
 import requests
 import zipfile
 import shutil
+from sympy import false
 from tqdm import tqdm
 from pathlib import Path
 import cv2
@@ -196,7 +197,7 @@ def prepare_visdrone(data_dir, output_dir, download=True, datasets=None):
     for dataset in datasets:
         print(f"\nProcessing {dataset} dataset...")
         
-        if download:
+        if False:
             # Download the dataset
             zip_path = os.path.join(data_dir, f"VisDrone2019-DET-{dataset}.zip")
             if not os.path.exists(zip_path):
