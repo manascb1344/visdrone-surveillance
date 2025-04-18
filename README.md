@@ -96,3 +96,13 @@ visdrone-rtmp/
 - [VisDrone Dataset](https://github.com/VisDrone/VisDrone-Dataset)
 - [YOLOv8](https://github.com/ultralytics/ultralytics)
 - [Detectron2](https://github.com/facebookresearch/detectron2)
+
+
+
+```
+docker run -d \
+  --name nginx-rtmp \
+  -p 1935:1935 \
+  -p 8080:80 \
+  alfg/nginx-rtmp
+```

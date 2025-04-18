@@ -1,8 +1,9 @@
 # VisDrone custom configuration for YOLOv8
-path: /home/mcb76/ml-proj-man/datasets/VisDrone-YOLO  # dataset root directory (absolute path)
-train: train/images  # train images relative to path
-val: val/images  # val images relative to path
-test: test/images  # test images relative to path
+# path: /content/datasets/VisDrone-YOLO  # dataset root directory (absolute path)
+path: /home/mcb76/ml-proj-man/datasets/VisDrone-YOLO
+train: images/train  # train images relative to path
+val: images/val  # val images relative to path
+test: images/test  # test images relative to path
 
 # Classes
 nc: 11  # Number of classes (increased from 10 to 11 to include class 10)

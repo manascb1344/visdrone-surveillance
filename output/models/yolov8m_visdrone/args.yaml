@@ -1,7 +1,7 @@
 task: detect
 mode: train
 model: yolov8m.pt
-data: configs/visdrone_custom.yaml
+data: /content/ml-proj-man/configs/visdrone_custom.yaml
 epochs: 1
 time: null
 patience: 50
