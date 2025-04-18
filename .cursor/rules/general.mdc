@@ -1,0 +1,21 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Dont use npx task-master or npx task-master-ai just use plain task-master
+Dont use MCP Server always use terminal commands
+
+use pnpm instead of npm
+Do test driven deveo any file make sure to read it firstlopment
+write tests for frontend as well as backend
+
+Before writing to any file make sure to read it first
+dont add new package withoit permissionw
+dont make config changes that affect a lot of things
+
+Make proper commits after every subtask only after you ensure that the changes are well tested and work properly as exected, also before each commit ensure that the entire project build properly only then commit it
+Before adding files make sure to check git status then add proper relevant files
+
+
+Always use relative imports
