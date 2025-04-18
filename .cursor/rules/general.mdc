@@ -19,3 +19,4 @@ Before adding files make sure to check git status then add proper relevant files
 
 Always use relative imports
 Never have any placeholder implemetation, always do proper final implementation
+Go on running the files when as as needed such that at last i have all the proper files and proper data structure

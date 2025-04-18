@@ -1,0 +1,74 @@
+# VisDrone custom configuration for YOLOv8
+path: /home/mcb76/ml-proj-man/datasets/VisDrone-YOLO  # dataset root directory (absolute path)
+train: train/images  # train images relative to path
+val: val/images  # val images relative to path
+test: test/images  # test images relative to path
+
+# Classes
+nc: 11  # Number of classes (increased from 10 to 11 to include class 10)
+names:
+  0: pedestrian
+  1: people
+  2: bicycle
+  3: car
+  4: van
+  5: truck
+  6: tricycle
+  7: awning-tricycle
+  8: bus
+  9: motor
+  10: ignored-regions  # Added class 10, likely represents ignored regions or other objects
+
+# Training parameters
+epochs: 100
+batch_size: 16
+imgsz: 640
+device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
+workers: 8  # maximum number of dataloader workers
+patience: 50  # early stopping patience (epochs without improvement)
+save_period: 10  # save checkpoint every x epochs
+freeze: 0  # freeze layers until this layer during training
+
+# Optimizer parameters - higher initial learning rate with cosine scheduler
+lr0: 0.01  # initial learning rate
+lrf: 0.01  # final learning rate (lr0 * lrf)
+momentum: 0.937  # SGD momentum/Adam beta1
+weight_decay: 0.0005  # optimizer weight decay
+warmup_epochs: 3.0  # warmup epochs
+warmup_momentum: 0.8  # warmup initial momentum
+warmup_bias_lr: 0.1  # warmup initial bias lr
+
+# Loss weights
+box: 7.5  # box loss gain
+cls: 0.5  # cls loss gain
+dfl: 1.5  # dfl loss gain
+nbs: 64  # nominal batch size
+
+# Model configuration
+model:
+  type: yolov8
+  size: m  # m size model - good balance of accuracy and speed for aerial imagery
+  pretrained: True  # start with pretrained COCO weights
+
+# Augmentation parameters - customized for aerial drone imagery
+augment: True
+mosaic: 1.0  # mosaic augmentation (0-1)
+degrees: 0.0  # rotation augmentation (+/- deg) - keep minimal for drone footage
+translate: 0.2  # translation augmentation (+/- fraction) - higher for object position variations
+scale: 0.6  # scale augmentation (+/- gain) - higher for varied object sizes in aerial imagery
+shear: 0.0  # shear augmentation (+/- deg)
+perspective: 0.0  # perspective augmentation (+/- fraction)
+flipud: 0.1  # vertical flip augmentation probability - some for drone viewpoint changes
+fliplr: 0.5  # horizontal flip augmentation probability
+hsv_h: 0.015  # image HSV-Hue augmentation (fraction)
+hsv_s: 0.7  # image HSV-Saturation augmentation (fraction)
+hsv_v: 0.4  # image HSV-Value augmentation (fraction)
+
+# Evaluation parameters
+val_conf: 0.001  # validation confidence threshold
+val_iou: 0.6  # NMS IoU threshold for validation - lower for crowded scenes
+
+# Checkpoint parameters
+project: output/models  # save to project/name
+name: yolov8m_visdrone  # save to project/name
+exist_ok: True  # existing project/name ok, do not increment 

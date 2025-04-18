@@ -1,0 +1,57 @@
+augment: true
+batch_size: 16
+box: 7.5
+cls: 0.5
+degrees: 0.0
+device: 0
+dfl: 1.5
+epochs: 1
+exist_ok: true
+fliplr: 0.5
+flipud: 0.1
+freeze: 0
+hsv_h: 0.015
+hsv_s: 0.7
+hsv_v: 0.4
+imgsz: 640
+lr0: 0.01
+lrf: 0.01
+model:
+  pretrained: true
+  size: m
+  type: yolov8
+momentum: 0.937
+mosaic: 1.0
+name: yolov8m_visdrone
+names:
+  0: pedestrian
+  1: people
+  2: bicycle
+  3: car
+  4: van
+  5: truck
+  6: tricycle
+  7: awning-tricycle
+  8: bus
+  9: motor
+  10: ignored-regions
+nbs: 64
+nc: 11
+path: /home/mcb76/ml-proj-man/datasets/VisDrone-YOLO
+patience: 50
+perspective: 0.0
+project: output/models
+save_period: 10
+scale: 0.6
+shear: 0.0
+test: test/images
+train: train/images
+translate: 0.2
+val: val/images
+val_conf: 0.001
+val_iou: 0.6
+warmup_bias_lr: 0.1
+warmup_epochs: 3.0
+warmup_momentum: 0.8
+weight_decay: 0.0005
+workers: 8
