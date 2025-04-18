@@ -1,0 +1,13 @@
+path: /content/visdrone_yolo
+train: images/train
+val: images/val
+nc: 8
+names:
+- person
+- bicycle
+- car
+- van
+- truck
+- tricycle
+- bus
+- motorcycle
