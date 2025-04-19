@@ -6,3 +6,5 @@ ultralytics>=8.0.0
 matplotlib>=3.5.0
 onnx>=1.12.0
 onnxruntime>=1.10.0 
+onnxslim
+onnxruntime-gpu
