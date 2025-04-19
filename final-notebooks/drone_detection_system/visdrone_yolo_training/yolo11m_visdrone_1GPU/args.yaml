@@ -1,11 +1,11 @@
 task: detect
 mode: train
-model: yolov8n.pt
+model: yolo11m.pt
 data: ./visdrone_yolo/dataset.yaml
 epochs: 1
 time: null
 patience: 20
-batch: 64
+batch: 8
 imgsz: 640
 save: true
 save_period: -1
@@ -13,7 +13,7 @@ cache: false
 device: '0'
 workers: 16
 project: ./visdrone_yolo_training
-name: yolov8n_visdrone_1GPU
+name: yolo11m_visdrone_1GPU
 exist_ok: true
 pretrained: true
 optimizer: Adam
@@ -101,4 +101,4 @@ auto_augment: randaugment
 erasing: 0.4
 cfg: null
 tracker: botsort.yaml
-save_dir: visdrone_yolo_training/yolov8n_visdrone_1GPU
+save_dir: visdrone_yolo_training/yolo11m_visdrone_1GPU

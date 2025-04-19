@@ -5,7 +5,7 @@ import torch
 
 class ModelTrainer:
     """
-    Class for training YOLOv8 models on the VisDrone dataset.
+    Class for training yolo11 models on the VisDrone dataset.
     """
     
     def __init__(self, project_dir="./visdrone_yolo_training"):
@@ -26,7 +26,7 @@ class ModelTrainer:
                   img_size=640, 
                   num_gpus=1):
         """
-        Train YOLOv8 on the converted VisDrone dataset using multiple GPUs.
+        Train yolo11 on the converted VisDrone dataset using multiple GPUs.
 
         Args:
             dataset_yaml (str): Path to the dataset YAML file
@@ -42,25 +42,25 @@ class ModelTrainer:
         if num_gpus <= 0:
             print("Number of GPUs must be positive. Defaulting to 1 GPU.")
             device_str = '0'
-            run_name = f"yolov8{model_size}_visdrone_1GPU"
+            run_name = f"yolo11{model_size}_visdrone_1GPU"
             effective_batch_per_gpu = batch_size
         elif num_gpus == 1:
              device_str = '0'
-             run_name = f"yolov8{model_size}_visdrone_1GPU"
+             run_name = f"yolo11{model_size}_visdrone_1GPU"
              effective_batch_per_gpu = batch_size
         else:
             # Create device string like '0,1' for num_gpus=2
             device_str = ','.join(map(str, range(num_gpus)))
-            run_name = f"yolov8{model_size}_visdrone_{num_gpus}GPU"
+            run_name = f"yolo11{model_size}_visdrone_{num_gpus}GPU"
             effective_batch_per_gpu = batch_size // num_gpus
 
-        print(f"Training YOLOv8{model_size} on VisDrone dataset for {epochs} epochs using {num_gpus} GPU(s) ({device_str}).")
+        print(f"Training yolo11{model_size} on VisDrone dataset for {epochs} epochs using {num_gpus} GPU(s) ({device_str}).")
         print(f"Total batch size: {batch_size} (Effective batch size per GPU: {effective_batch_per_gpu})")
         if batch_size % num_gpus != 0 and num_gpus > 1:
              print(f"Warning: Batch size {batch_size} is not perfectly divisible by {num_gpus} GPUs.")
 
-        # Load pre-trained YOLOv8 model
-        model = YOLO(f"yolov8{model_size}.pt")
+        # Load pre-trained yolo11 model
+        model = YOLO(f"yolo11{model_size}.pt")
 
         # Define number of workers for data loading
         try:

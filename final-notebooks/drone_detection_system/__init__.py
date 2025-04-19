@@ -1,7 +1,7 @@
 """
 Drone Detection System Package
 
-A system for drone-based object detection using YOLOv8 and the VisDrone dataset.
+A system for drone-based object detection using yolo11 and the VisDrone dataset.
 """
 
 __version__ = '1.0.0'
