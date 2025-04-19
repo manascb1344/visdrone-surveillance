@@ -60,15 +60,17 @@ class RTMPProcessor:
             print(f"Error installing FFmpeg: {e}")
             return False
             
-    def process_feed(self, rtmp_url, output_path=None, confidence_threshold=0.25, max_frames=300):
+    def process_feed(self, rtmp_url, output_path=None, confidence_threshold=0.25, max_frames=300, nms_iou_threshold=0.5, follow_target_id=None):
         """
-        Process an RTMP feed with the loaded YOLO model
+        Process an RTMP feed with the loaded YOLO model(s)
         
         Args:
             rtmp_url (str): The RTMP URL to process
             output_path (str, optional): Path to save output video
             confidence_threshold (float): Confidence threshold for detections
             max_frames (int): Maximum frames to process
+            nms_iou_threshold (float): NMS IoU threshold for ensemble mode
+            follow_target_id (int, optional): Track ID to follow. Defaults to None.
             
         Returns:
             dict: Processing statistics
@@ -79,6 +81,15 @@ class RTMPProcessor:
             
         print(f"Attempting to connect to RTMP feed: {rtmp_url}")
         
+        # Add check: Following only works in single model (non-ensemble) mode
+        if follow_target_id is not None and self.is_ensemble:
+             print("Warning: Target following (--follow-id) is only supported in single-model mode. Disabling follow.")
+             follow_target_id = None 
+             
+        if not self.models:
+            print("Error: No models available for processing.")
+            return None
+            
         # In non-local environments, we'll use FFmpeg to download a segment for testing
         temp_file = "/tmp/rtmp_temp.mp4"
 
@@ -118,87 +129,124 @@ class RTMPProcessor:
             total_detection_counts = {class_name: 0 for class_name in self.class_names} # Total counts for summary
             unique_track_ids = set() # Store unique track IDs encountered
             start_time = time.time()
-            last_print_time = start_time
-
-            # Process frames
             frames_to_display = []
+
+            # Get frame dimensions once for control logic
+            frame_center_x = frame_width / 2
+            frame_center_y = frame_height / 2
 
             while cap.isOpened() and frame_count < max_frames:
                 ret, frame = cap.read()
-                if not ret:
-                    print("End of video or error reading frame.")
-                    break
-
+                if not ret: break
                 frame_count += 1
 
-                # Run YOLO inference with tracking
-                # Use model.track() instead of model()
-                # persist=True maintains tracks across frames
-                # tracker='bytetrack.yaml' # Optionally specify tracker (botsort is default)
-                results = self.model.track(frame, persist=True, conf=confidence_threshold, verbose=False)
-
-                # Reset frame-specific counts
-                frame_detection_counts = {class_name: 0 for class_name in self.class_names} 
-                current_frame_track_ids = set() # Track IDs active in the current frame
-
-                # Create a copy of the frame for drawing
+                # --- Inference --- 
+                target_box_coords = None # To store the box of the tracked target
+                final_boxes = []
+                final_scores = []
+                final_labels = []
+                final_track_ids = [] # Only populated in single model mode
+                
+                if self.is_ensemble:
+                    # Ensemble logic (predict + NMS)
+                    all_pred_boxes = []
+                    all_pred_scores = []
+                    all_pred_labels = []
+                    for model in self.models:
+                        results = model.predict(frame, conf=confidence_threshold, verbose=False)
+                        if results[0].boxes is not None:
+                            all_pred_boxes.extend(results[0].boxes.xyxy.cpu().tolist())
+                            all_pred_scores.extend(results[0].boxes.conf.cpu().tolist())
+                            all_pred_labels.extend(results[0].boxes.cls.cpu().tolist())
+                    
+                    final_boxes, final_scores, final_labels = self._apply_ensemble_nms(
+                        all_pred_boxes, all_pred_scores, all_pred_labels, nms_iou_threshold
+                    )
+                    # Note: Tracking IDs are lost here
+                else: # Single model mode (allows tracking)
+                    model = self.models[0]
+                    results = model.track(frame, persist=True, conf=confidence_threshold, verbose=False)
+                    
+                    if results[0].boxes is not None and results[0].boxes.id is not None: 
+                         boxes_data = results[0].boxes.data.cpu() # Get tensor with xyxy, track_id, conf, cls
+                         for row in boxes_data:
+                             box = row[:4].tolist()
+                             track_id = int(row[4])
+                             conf = float(row[5])
+                             cls_id = int(row[6])
+                             
+                             final_boxes.append(box)
+                             final_scores.append(conf)
+                             final_labels.append(cls_id)
+                             final_track_ids.append(track_id)
+                             
+                             # Find the target box if ID matches
+                             if follow_target_id is not None and track_id == follow_target_id:
+                                 target_box_coords = box 
+                    # Handle case where tracking might fail but detection works (optional)
+                    elif results[0].boxes is not None:
+                         boxes = results[0].boxes.xyxy.cpu().tolist()
+                         confs = results[0].boxes.conf.cpu().tolist()
+                         clss = results[0].boxes.cls.cpu().tolist()
+                         final_boxes, final_scores, final_labels = boxes, confs, clss
+                
+                # --- Annotation --- 
                 annotated_frame = frame.copy()
+                current_frame_detection_counts = {class_name: 0 for class_name in self.class_names} 
 
-                # Process results
-                # Check if boxes and track IDs exist in the results
-                if results[0].boxes is not None and results[0].boxes.id is not None:
-                    # Combine boxes, track IDs, confidences, and classes
-                    boxes = results[0].boxes.xyxy.cpu()
-                    track_ids = results[0].boxes.id.int().cpu().tolist()
-                    confs = results[0].boxes.conf.cpu().tolist()
-                    clss = results[0].boxes.cls.cpu().tolist()
+                # Draw final detections 
+                for i, box in enumerate(final_boxes):
+                    x1, y1, x2, y2 = map(int, box)
+                    score = final_scores[i]
+                    label_idx = int(final_labels[i])
+                    cls_name = self.class_names[label_idx] if 0 <= label_idx < len(self.class_names) else f"class_{label_idx}"
+                    color = self.colors[label_idx % len(self.colors)]
 
-                    for box, track_id, conf, cls_id_float in zip(boxes, track_ids, confs, clss):
-                        # Get box coordinates
-                        x1, y1, x2, y2 = map(int, box)
-                        cls_id = int(cls_id_float)
-                        
-                        # Add track ID to current frame set and overall unique set
-                        current_frame_track_ids.add(track_id)
-                        unique_track_ids.add(track_id)
+                    # Update counters based on final detections
+                    if cls_name in current_frame_detection_counts:
+                        current_frame_detection_counts[cls_name] += 1
+                    if cls_name in total_detection_counts:
+                        total_detection_counts[cls_name] += 1
 
-                        # Get class name
-                        cls_name = self.class_names[cls_id] if 0 <= cls_id < len(self.class_names) else f"class_{cls_id}"
-
-                        # Update frame detection counts (by class)
-                        if cls_name in frame_detection_counts:
-                            frame_detection_counts[cls_name] += 1
-                        # Update total detection counts (by class) - Optional if focusing on tracks
-                        if cls_name in total_detection_counts:
-                            total_detection_counts[cls_name] += 1
-
-                        # Get color for this class
-                        color = self.colors[cls_id % len(self.colors)]
-
-                        # Draw bounding box
-                        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
-
-                        # Add label with Track ID
-                        label = f"ID:{track_id} {cls_name}: {conf:.2f}"
-                        text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
-                        cv2.rectangle(annotated_frame, (x1, y1-text_size[1]-5), (x1+text_size[0], y1), color, -1)
-                        cv2.putText(annotated_frame, label, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-
-                # Display statistics on frame
+                    # Draw bounding box
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
+                    
+                    # Add label (Include track ID only in single model mode)
+                    label = f"{cls_name}: {score:.2f}"
+                    if not self.is_ensemble and i < len(final_track_ids):
+                        label = f"ID:{final_track_ids[i]} {label}"
+                    
+                    text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
+                    cv2.rectangle(annotated_frame, (x1, y1-text_size[1]-5), (x1+text_size[0], y1), color, -1)
+                    cv2.putText(annotated_frame, label, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                
+                # --- Display Drone Control Command --- 
+                drone_command = "N/A" # Default command text
+                if follow_target_id is not None and not self.is_ensemble:
+                    drone_command = self._get_control_commands(
+                        frame_center_x, frame_center_y, target_box_coords # Pass found target box
+                    )
+                    # Display Command on Frame
+                    cmd_text_pos = (int(frame_center_x) - 150, frame_height - 20) # Bottom center
+                    (w, h), _ = cv2.getTextSize(f"CMD: {drone_command}", cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                    cv2.rectangle(annotated_frame, (cmd_text_pos[0]-10, cmd_text_pos[1]-h-5), (cmd_text_pos[0]+w+10, cmd_text_pos[1]+10), (0,0,0), -1)
+                    cv2.putText(annotated_frame, f"CMD: {drone_command}", cmd_text_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2) # Yellow text
+                
+                # --- Display Other Statistics (FPS, Detections/Tracks) --- 
                 elapsed_time = time.time() - start_time
                 fps_actual = frame_count / elapsed_time if elapsed_time > 0 else 0
-
-                # Add FPS counter
                 cv2.rectangle(annotated_frame, (10, 10), (200, 40), (0, 0, 0), -1)
                 cv2.putText(annotated_frame, f"FPS: {fps_actual:.1f}", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-                # Display detections counter (Active Tracks in Frame)
+                
                 y_offset = 50
-                active_tracks_count = len(current_frame_track_ids) # Count active tracks
-                cv2.rectangle(annotated_frame, (10, y_offset), (250, y_offset + 30), (0, 0, 0), -1)
-                cv2.putText(annotated_frame, f"Active Tracks: {active_tracks_count}", (15, y_offset + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-                # Optional: Add back per-class count for the frame if needed
-                # y_offset += 40 ... draw frame_detection_counts ...
+                if self.is_ensemble:
+                     num_current_detections = len(final_boxes)
+                     cv2.rectangle(annotated_frame, (10, y_offset), (250, y_offset + 30), (0, 0, 0), -1)
+                     cv2.putText(annotated_frame, f"Detections: {num_current_detections}", (15, y_offset + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                else: # Single model, show active tracks 
+                     active_tracks_count = len(final_track_ids)
+                     cv2.rectangle(annotated_frame, (10, y_offset), (250, y_offset + 30), (0, 0, 0), -1)
+                     cv2.putText(annotated_frame, f"Active Tracks: {active_tracks_count}", (15, y_offset + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
                 # Save frame if using output path
                 if out:
@@ -213,19 +261,17 @@ class RTMPProcessor:
             if out:
                 out.release()
                 
-            # Return results
+            # Return results (adjust what's returned if needed)
             elapsed_time = time.time() - start_time
-            
             results = {
                 "frame_count": frame_count,
                 "elapsed_time": elapsed_time,
                 "fps": frame_count / elapsed_time if elapsed_time > 0 else 0,
-                "total_unique_tracks": len(unique_track_ids), # Store total unique tracks
-                "total_detection_counts": total_detection_counts, # Keep class counts if needed
+                "total_detection_counts": total_detection_counts, 
                 "sorted_total_detections": sorted([(k,v) for k,v in total_detection_counts.items() if v > 0], key=lambda item: item[1], reverse=True),
                 "frames_to_display": frames_to_display
+                # Removed unique track count as it wasn't used consistently between modes
             }
-            
             return results
 
         except Exception as e:
@@ -511,3 +557,60 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Error generating RTMP script: {e}")
             return None 
+
+    def _get_control_commands(self, frame_center_x, frame_center_y, target_box, target_area_ratio_threshold=0.05, dead_zone_ratio=0.1):
+        """Calculate simple directional commands based on target position and size."""
+        if target_box is None:
+            return "Target Lost"
+
+        x1, y1, x2, y2 = target_box
+        target_center_x = (x1 + x2) / 2
+        target_center_y = (y1 + y2) / 2
+        target_width = x2 - x1
+        target_height = y2 - y1
+        target_area = target_width * target_height
+        frame_area = frame_center_x * 2 * frame_center_y * 2 # Approx frame area
+
+        dx = target_center_x - frame_center_x
+        dy = target_center_y - frame_center_y
+
+        # Calculate dead zone boundaries
+        dead_zone_x = frame_center_x * 2 * dead_zone_ratio / 2
+        dead_zone_y = frame_center_y * 2 * dead_zone_ratio / 2
+
+        commands = []
+
+        # Horizontal command
+        if dx > dead_zone_x:
+            commands.append("Move Right")
+        elif dx < -dead_zone_x:
+            commands.append("Move Left")
+        # else: commands.append("Hold Lateral") # Optional
+
+        # Vertical command
+        if dy > dead_zone_y: # Target is below center
+            commands.append("Move Down")
+        elif dy < -dead_zone_y: # Target is above center
+            commands.append("Move Up")
+        # else: commands.append("Hold Vertical") # Optional
+
+        # Forward/Backward command (based on area ratio)
+        target_area_ratio = target_area / frame_area
+        if target_area_ratio < (target_area_ratio_threshold * 0.8): # Target too small
+            commands.append("Move Forward")
+        elif target_area_ratio > (target_area_ratio_threshold * 1.2): # Target too big
+            commands.append("Move Backward")
+        # else: commands.append("Hold Distance") # Optional
+        
+        # Rotation Command (Simple - based on horizontal offset when close)
+        # if target_area_ratio > target_area_ratio_threshold * 0.5: # Only rotate if reasonably close
+        #     if dx > dead_zone_x * 1.5: # Adjust multiplier as needed
+        #          commands.append("Rotate CW")
+        #     elif dx < -dead_zone_x * 1.5:
+        #          commands.append("Rotate CCW")
+            
+
+        if not commands:
+            return "Hold Position"
+        
+        return ", ".join(commands) 

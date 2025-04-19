@@ -100,14 +100,18 @@ python main.py --mode test --model-path ./models/visdrone_yolo_n.pt ./models/vis
 Processes a live RTMP video stream using a single model (with tracking) or an ensemble (NMS-based detection).
 
 ```bash
-# Process with a single model (e.g., exported ONNX) - tracking enabled
+# Process with a single model - tracking enabled
 python main.py --mode rtmp --model-path ./train_run_n/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --output-video ./output_n.mp4
 
-# Process with an ensemble of models - NMS detection, no tracking IDs
+# Process with a single model AND generate follow commands for track ID 5
+python main.py --mode rtmp --model-path ./train_run_n/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --follow-id 5
+
+# Process with an ensemble of models - NMS detection, no tracking IDs, no following
 python main.py --mode rtmp --model-path ./train_run_n/weights/best.pt ./train_run_m/weights/best.pt --rtmp-url rtmp://YOUR_STREAM_URL --output-video ./output_ensemble.mp4
 ```
 *Replace `rtmp://YOUR_STREAM_URL` with your actual stream URL.* 
 *Client script generation (`rtmp_processor.py`) only occurs when running with a single model.* 
+*Target following (`--follow-id`) only works with a single model (tracking required).* 
 
 ## Example Workflow
 
