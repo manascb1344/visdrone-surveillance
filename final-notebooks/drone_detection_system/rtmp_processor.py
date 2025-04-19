@@ -472,9 +472,9 @@ def process_rtmp_feed(rtmp_url, model_path, confidence_threshold=0.25, display=T
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process RTMP stream with YOLOv8 model.")
+    parser = argparse.ArgumentParser(description="Process RTMP stream with yolo11 model.")
     parser.add_argument("rtmp_url", help="URL of the RTMP stream (e.g., rtmp://ip_address/live/stream)")
-    parser.add_argument("model_path", help="Path to the trained YOLOv8 model (.pt file)")
+    parser.add_argument("model_path", help="Path to the trained yolo11 model (.pt file)")
     parser.add_argument("--conf", type=float, default=0.3, help="Confidence threshold for detection (default: 0.3)")
     parser.add_argument("--no-display", action="store_true", help="Run without displaying the video feed")
 
