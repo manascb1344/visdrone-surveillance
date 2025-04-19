@@ -60,6 +60,10 @@ def parse_args():
     parser.add_argument('--output-video', type=str,
                        help='Path to save output video')
     
+    # Follow target (New)
+    parser.add_argument('--follow-id', type=int, default=None,
+                       help='Track ID of the object to generate follow commands for (single model RTMP mode only)')
+    
     return parser.parse_args()
 
 def main():
@@ -154,17 +158,23 @@ def main():
             print("Error: --model-path is required for rtmp mode")
             return
             
-        # Initialize RTMP processor - YOLO() should handle .pt, .onnx, .engine
-        processor = RTMPProcessor(model_path=args.model_path)
+        # Check if ensemble mode is used with follow-id
+        if args.follow_id is not None and len(args.model_path) > 1:
+            print("Error: --follow-id can only be used with a single model path (ensemble mode not supported for following).")
+            return
+            
+        # Initialize RTMP processor - uses first model if list provided (checked above)
+        processor = RTMPProcessor(model_path=args.model_path[0])
         
         # Install FFmpeg if needed
         processor.install_ffmpeg()
         
-        # Process the feed
+        # Process the feed, passing the follow_id
         results = processor.process_feed(
             rtmp_url=args.rtmp_url,
             output_path=args.output_video,
-            confidence_threshold=args.conf_threshold
+            confidence_threshold=args.conf_threshold,
+            follow_target_id=args.follow_id # Pass the ID
         )
         
         # Display results if available
