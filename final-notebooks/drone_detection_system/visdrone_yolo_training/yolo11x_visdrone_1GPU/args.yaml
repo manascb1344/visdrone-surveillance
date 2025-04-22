@@ -2,10 +2,10 @@ task: detect
 mode: train
 model: yolo11x.pt
 data: ./visdrone_yolo/dataset.yaml
-epochs: 1
+epochs: 25
 time: null
 patience: 20
-batch: 4
+batch: 8
 imgsz: 640
 save: true
 save_period: -1

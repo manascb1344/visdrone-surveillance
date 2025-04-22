@@ -4,17 +4,8 @@ from ultralytics import YOLO
 import torch
 
 class ModelTrainer:
-    """
-    Class for training yolo11 models on the VisDrone dataset.
-    """
     
     def __init__(self, project_dir="./visdrone_yolo_training"):
-        """
-        Initialize the model trainer.
-        
-        Args:
-            project_dir (str): Directory to save training results
-        """
         self.project_dir = project_dir
         os.makedirs(project_dir, exist_ok=True)
     
@@ -25,20 +16,6 @@ class ModelTrainer:
                   batch_size=16, 
                   img_size=640, 
                   num_gpus=1):
-        """
-        Train yolo11 on the converted VisDrone dataset using multiple GPUs.
-
-        Args:
-            dataset_yaml (str): Path to the dataset YAML file
-            model_size (str): YOLO model size (n, s, m, l, x)
-            epochs (int): Number of training epochs
-            batch_size (int): Total batch size across all GPUs
-            img_size (int): Image size for training
-            num_gpus (int): Number of GPUs to use
-            
-        Returns:
-            object: Training results
-        """
         if num_gpus <= 0:
             print("Number of GPUs must be positive. Defaulting to 1 GPU.")
             device_str = '0'
@@ -49,7 +26,6 @@ class ModelTrainer:
              run_name = f"yolo11{model_size}_visdrone_1GPU"
              effective_batch_per_gpu = batch_size
         else:
-            # Create device string like '0,1' for num_gpus=2
             device_str = ','.join(map(str, range(num_gpus)))
             run_name = f"yolo11{model_size}_visdrone_{num_gpus}GPU"
             effective_batch_per_gpu = batch_size // num_gpus
@@ -59,36 +35,32 @@ class ModelTrainer:
         if batch_size % num_gpus != 0 and num_gpus > 1:
              print(f"Warning: Batch size {batch_size} is not perfectly divisible by {num_gpus} GPUs.")
 
-        # Load pre-trained yolo11 model
         model = YOLO(f"yolo11{model_size}.pt")
 
-        # Define number of workers for data loading
         try:
-            num_workers = min(16, os.cpu_count()) # Use up to 16 workers or max available cores
+            num_workers = min(16, os.cpu_count()) 
         except NotImplementedError:
-            num_workers = 8 # Default if cpu_count() is not available
+            num_workers = 8 
         print(f"Using {num_workers} data loading workers.")
 
-        # Train the model using specified GPUs
         results = model.train(
             data=dataset_yaml,
             epochs=epochs,
-            batch=batch_size,        # Total batch size across all devices
+            batch=batch_size,        
             imgsz=img_size,
-            patience=20,             # Early stopping patience
-            save=True,               # Save checkpoints
-            device=device_str,       # Specify the GPUs to use
+            patience=20,             
+            save=True,               
+            device=device_str,       
             project=self.project_dir,
-            name=run_name,           # Use the modified run name for output folder
+            name=run_name,           
             exist_ok=True,
             pretrained=True,
             optimizer="Adam",
-            workers=num_workers,     # Set number of data loader workers
+            workers=num_workers,     
         )
 
         print("Training completed.")
         
-        # Get path to best model
         training_run_dir = os.path.join(self.project_dir, run_name)
         best_model_path = os.path.join(training_run_dir, "weights", "best.pt")
         
@@ -100,17 +72,6 @@ class ModelTrainer:
         }
     
     def save_model(self, model_path, save_dir, new_name=None):
-        """
-        Save a copy of the model to a new location.
-        
-        Args:
-            model_path (str): Path to the model to save
-            save_dir (str): Directory to save the model to
-            new_name (str, optional): New name for the model
-            
-        Returns:
-            str: Path to the saved model
-        """
         os.makedirs(save_dir, exist_ok=True)
         
         if not os.path.exists(model_path):
