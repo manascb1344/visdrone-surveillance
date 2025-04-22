@@ -136,22 +136,34 @@ class Visualizer:
                 try:
                     results = model(img_path, conf=conf_threshold, verbose=False)
                     boxes = results[0].boxes
+                    
+                    # Debug print
+                    print(f"  Model {model_name} detected {len(boxes.xyxy) if hasattr(boxes, 'xyxy') else 0} boxes")
 
-                    for box in boxes:
-                        xyxy = box.xyxy[0].cpu().numpy().astype(int)
-                        conf = box.conf[0].cpu().numpy()
-                        cls = int(box.cls[0].cpu().numpy())
-
-                        x1, y1, x2, y2 = xyxy
-
-                        class_name = self.class_names[cls] if cls < len(self.class_names) else f"CLS {cls}"
-                        label = f'{model_name}: {class_name} {conf:.2f}'
-
-                        cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, 2)
-
-                        (label_width, label_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                        cv2.rectangle(vis_img, (x1, y1 - label_height - baseline), (x1 + label_width, y1), color, -1)
-                        cv2.putText(vis_img, label, (x1, y1 - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1)
+                    if hasattr(boxes, 'xyxy') and len(boxes.xyxy) > 0:
+                        for j in range(len(boxes.xyxy)):
+                            try:
+                                xyxy = boxes.xyxy[j].cpu().numpy().astype(int)
+                                conf = boxes.conf[j].cpu().numpy() if hasattr(boxes, 'conf') else 0.0
+                                cls = int(boxes.cls[j].cpu().numpy()) if hasattr(boxes, 'cls') else 0
+                                
+                                x1, y1, x2, y2 = xyxy
+                                
+                                # Ensure valid box coordinates
+                                if x1 >= 0 and y1 >= 0 and x2 > x1 and y2 > y1:
+                                    class_name = self.class_names[cls] if cls < len(self.class_names) else f"CLS {cls}"
+                                    label = f'{model_name}: {class_name} {conf:.2f}'
+                                    
+                                    # Use thicker lines for better visibility
+                                    cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, 2)
+                                    
+                                    (label_width, label_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                                    cv2.rectangle(vis_img, (x1, y1 - label_height - baseline), (x1 + label_width, y1), color, -1)
+                                    cv2.putText(vis_img, label, (x1, y1 - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1)
+                            except Exception as e:
+                                print(f"  Error processing box {j}: {e}")
+                    else:
+                        print(f"  Model {model_name} found no boxes above threshold {conf_threshold}")
 
                 except Exception as e:
                     print(f"  Error during inference with model {model_name} on {img_name}: {e}")

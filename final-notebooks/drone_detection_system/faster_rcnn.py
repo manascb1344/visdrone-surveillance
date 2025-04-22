@@ -104,6 +104,7 @@ class FasterRCNNTrainer:
         self.class_names = dataset_config['names']
         device = torch.device('cuda' if torch.cuda.is_available() and num_gpus > 0 else 'cpu')
         
+        print(f"Loading dataset from {dataset_path}")
         train_dataset = YOLOFormatDataset(
             images_dir=os.path.join(dataset_path, dataset_config['train']),
             labels_dir=os.path.join(dataset_path, 'labels', 'train'),
@@ -111,6 +112,7 @@ class FasterRCNNTrainer:
             class_names=self.class_names
         )
         
+        print(f"Creating data loader with batch size {batch_size}")
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
@@ -119,32 +121,55 @@ class FasterRCNNTrainer:
             num_workers=min(8, os.cpu_count() or 4)
         )
         
+        print("Building model...")
         model = self.build_model(len(self.class_names))
         model.to(device)
+        print(f"Model moved to device: {device}")
         
         if torch.cuda.is_available() and num_gpus > 1:
             model = nn.DataParallel(model)
+            print(f"Using {num_gpus} GPUs for training")
         
         optimizer = optim.SGD([p for p in model.parameters() if p.requires_grad], 
                             lr=learning_rate, momentum=0.9, weight_decay=0.0005)
         lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
         
+        print(f"Starting training for {epochs} epochs...")
         for epoch in range(epochs):
             model.train()
-            print(f"Epoch {epoch+1}/{epochs}")
-            for images, targets in train_loader:
+            epoch_loss = 0
+            batch_count = 0
+            print(f"\nEpoch {epoch+1}/{epochs}")
+            
+            for i, (images, targets) in enumerate(train_loader):
                 images = [image.to(device) for image in images]
                 targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
                 
                 loss_dict = model(images, targets)
                 losses = sum(loss for loss in loss_dict.values())
+                epoch_loss += losses.item()
+                batch_count += 1
                 
                 optimizer.zero_grad()
                 losses.backward()
                 optimizer.step()
+                
+                if (i + 1) % 10 == 0:  # Print every 10 batches
+                    print(f"  Batch {i+1}/{len(train_loader)}, Loss: {losses.item():.4f}")
+            
+            avg_loss = epoch_loss / batch_count
+            print(f"Epoch {epoch+1} completed. Average Loss: {avg_loss:.4f}")
+            print(f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}")
             
             lr_scheduler.step()
             
+            # Save checkpoint every 5 epochs
+            if (epoch + 1) % 5 == 0:
+                checkpoint_path = os.path.join(self.project_dir, f'checkpoint_epoch_{epoch+1}.pth')
+                torch.save(model.state_dict(), checkpoint_path)
+                print(f"Checkpoint saved: {checkpoint_path}")
+        
+        print("Training completed!")
         return model
 
 class FasterRCNNWrapper:
@@ -175,25 +200,48 @@ class FasterRCNNWrapper:
         
         with torch.no_grad():
             prediction = self.model([img_tensor])[0]
-        
+            
+            # --- Debugging Start ---
+            print(f"[FasterRCNNWrapper Debug] Raw Prediction Keys: {prediction.keys()}")
+            if 'scores' in prediction:
+                print(f"[FasterRCNNWrapper Debug] Raw Scores Count: {len(prediction['scores'])}")
+                if len(prediction['scores']) > 0:
+                    print(f"[FasterRCNNWrapper Debug] Max Raw Score: {torch.max(prediction['scores'])}")
+                    print(f"[FasterRCNNWrapper Debug] Raw Scores Sample: {prediction['scores'][:5]}") # Print first 5 scores
+            if 'boxes' in prediction:
+                print(f"[FasterRCNNWrapper Debug] Raw Boxes Count: {len(prediction['boxes'])}")
+            if 'labels' in prediction:
+                print(f"[FasterRCNNWrapper Debug] Raw Labels Count: {len(prediction['labels'])}")
+            # --- Debugging End ---
+
         keep = prediction['scores'] >= conf
         boxes = prediction['boxes'][keep]
         scores = prediction['scores'][keep]
         labels = prediction['labels'][keep] - 1
         
         class Results:
-            def __init__(self, boxes, scores, labels, orig_shape):
+            def __init__(self, boxes, scores, labels, orig_shape, device):
                 self.orig_shape = orig_shape
+                self.device = device  # Store device as an instance attribute
+                
                 class Boxes:
-                    def __init__(self, boxes, scores, labels):
+                    def __init__(self, boxes, scores, labels, device):
                         self.xyxy = boxes
                         self.conf = scores
                         self.cls = labels
-                        self.data = torch.cat((boxes, torch.zeros(len(boxes), 1), scores.unsqueeze(1), labels.unsqueeze(1)), dim=1)
+                        if len(boxes) > 0:
+                            self.data = torch.cat((boxes, torch.zeros(len(boxes), 1, device=device), 
+                                                 scores.unsqueeze(1), labels.unsqueeze(1)), dim=1)
+                        else:
+                            # Handle empty detection case
+                            self.data = torch.zeros((0, 7), device=device)
                         self.id = None
-                self.boxes = Boxes(boxes, scores, labels) if len(boxes) > 0 else None
+                
+                # Always create a Boxes object, even with empty detections
+                self.boxes = Boxes(boxes, scores, labels, device)
         
-        return [Results(boxes, scores, labels, (original_height, original_width))]
+        # Pass the device to the Results constructor
+        return [Results(boxes, scores, labels, (original_height, original_width), self.device)]
     
     def track(self, img, persist=True, conf=0.25):
         return self.predict(img, conf)

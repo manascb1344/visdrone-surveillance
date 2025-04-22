@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from faster_rcnn import FasterRCNNWrapper
+import torch
 
 class RTMPProcessor:
     
@@ -147,8 +148,9 @@ class RTMPProcessor:
                     all_pred_scores = []
                     all_pred_labels = []
                     for model in self.models:
-                        results = model.predict(frame, conf=confidence_threshold, verbose=False)
+                        results = model.predict(frame, conf=confidence_threshold)
                         if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
+                            print(f"Ensemble model detected {len(results[0].boxes.xyxy)} boxes")
                             all_pred_boxes.extend(results[0].boxes.xyxy.cpu().tolist())
                             all_pred_scores.extend(results[0].boxes.conf.cpu().tolist())
                             all_pred_labels.extend(results[0].boxes.cls.cpu().tolist())
@@ -156,42 +158,109 @@ class RTMPProcessor:
                     final_boxes, final_scores, final_labels = self._apply_ensemble_nms(
                         all_pred_boxes, all_pred_scores, all_pred_labels, nms_iou_threshold
                     )
+                    print(f"After NMS: {len(final_boxes)} boxes")
                 else: 
                     model = self.models[0]
                     
                     if isinstance(model, FasterRCNNWrapper):
-                        results = model.predict(frame, conf=confidence_threshold, verbose=False)
+                        results = model.predict(frame, conf=confidence_threshold)
                         
-                        if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
-                            boxes = results[0].boxes.xyxy.cpu().tolist()
-                            confs = results[0].boxes.conf.cpu().tolist()
-                            clss = results[0].boxes.cls.cpu().tolist()
-                            final_boxes, final_scores, final_labels = boxes, confs, clss
+                        # Initialize lists to ensure they are defined
+                        final_boxes, final_scores, final_labels = [], [], []
+                        
+                        # Simplified check for Faster R-CNN results
+                        if results and len(results) > 0 and hasattr(results[0], 'boxes') and \
+                           results[0].boxes is not None and hasattr(results[0].boxes, 'xyxy') and \
+                           len(results[0].boxes.xyxy) > 0:
+                           
+                            detected_boxes = results[0].boxes
+                            print(f"Faster R-CNN raw detection count: {len(detected_boxes.xyxy)}")
+
+                            try:
+                                # Directly access tensor attributes
+                                boxes_tensor = detected_boxes.xyxy
+                                scores_tensor = detected_boxes.conf
+                                labels_tensor = detected_boxes.cls
+                                
+                                # Convert tensors to lists
+                                temp_final_boxes = boxes_tensor.cpu().tolist() if isinstance(boxes_tensor, torch.Tensor) else []
+                                temp_final_scores = scores_tensor.cpu().tolist() if isinstance(scores_tensor, torch.Tensor) else []
+                                temp_final_labels = labels_tensor.cpu().tolist() if isinstance(labels_tensor, torch.Tensor) else []
+
+                                # Ensure lists are correctly populated and have the same length
+                                min_length = min(len(temp_final_boxes), len(temp_final_scores), len(temp_final_labels))
+                                if min_length < len(temp_final_boxes) or min_length < len(temp_final_scores) or min_length < len(temp_final_labels):
+                                    print(f"Warning: Mismatch in detection list lengths. Truncating to {min_length}.")
+                                
+                                # Assign truncated lists to final variables
+                                final_boxes = temp_final_boxes[:min_length]
+                                final_scores = temp_final_scores[:min_length]
+                                final_labels = temp_final_labels[:min_length]
+                                
+                                print(f"Processed Faster R-CNN results: {len(final_boxes)} boxes")
+                                
+                            except Exception as e:
+                                print(f"Error processing Faster R-CNN results: {e}")
+                                # Ensure lists are empty on error
+                                final_boxes, final_scores, final_labels = [], [], []
+                        else:
+                            # Handle cases where no boxes were detected or results structure is unexpected
+                            print("No valid detections found from Faster R-CNN or results structure issue.")
+                            # Ensure lists are empty if no detections
+                            final_boxes, final_scores, final_labels = [], [], []
                     else:
                         results = model.track(frame, persist=True, conf=confidence_threshold, verbose=False)
                         
                         if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
+                            # Add debug print to check detection results
+                            box_count = 0
+                            if hasattr(results[0].boxes, 'xyxy'):
+                                box_count = len(results[0].boxes.xyxy)
+                            elif hasattr(results[0].boxes, 'data'):
+                                box_count = len(results[0].boxes.data)
+                            
+                            print(f"YOLO detected {box_count} boxes")
+                            
                             if hasattr(results[0].boxes, 'id') and results[0].boxes.id is not None: 
-                                boxes_data = results[0].boxes.data.cpu() 
-                                for row in boxes_data:
-                                    box = row[:4].tolist()
-                                    track_id = int(row[4])
-                                    conf = float(row[5])
-                                    cls_id = int(row[6])
-                                    
-                                    final_boxes.append(box)
-                                    final_scores.append(conf)
-                                    final_labels.append(cls_id)
-                                    final_track_ids.append(track_id)
-                                    unique_track_ids.add(track_id)
-                                    
-                                    if follow_target_id is not None and track_id == follow_target_id:
-                                        target_box_coords = box 
+                                try:
+                                    boxes_data = results[0].boxes.data.cpu()
+                                    if len(boxes_data) > 0:  # Check if there are any boxes detected
+                                        for row in boxes_data:
+                                            if len(row) >= 7:  # Ensure the row has enough elements
+                                                box = row[:4].tolist()
+                                                track_id = int(row[4])
+                                                conf = float(row[5])
+                                                cls_id = int(row[6])
+                                                
+                                                final_boxes.append(box)
+                                                final_scores.append(conf)
+                                                final_labels.append(cls_id)
+                                                final_track_ids.append(track_id)
+                                                unique_track_ids.add(track_id)
+                                                
+                                                if follow_target_id is not None and track_id == follow_target_id:
+                                                    target_box_coords = box
+                                except Exception as e:
+                                    print(f"Error processing tracking data: {e}")
                             elif hasattr(results[0].boxes, 'xyxy'):
-                                boxes = results[0].boxes.xyxy.cpu().tolist()
-                                confs = results[0].boxes.conf.cpu().tolist()
-                                clss = results[0].boxes.cls.cpu().tolist()
-                                final_boxes, final_scores, final_labels = boxes, confs, clss
+                                try:
+                                    boxes = results[0].boxes.xyxy.cpu().numpy().tolist() if hasattr(results[0].boxes.xyxy, 'cpu') else results[0].boxes.xyxy
+                                    confs = results[0].boxes.conf.cpu().numpy().tolist() if hasattr(results[0].boxes.conf, 'cpu') else results[0].boxes.conf
+                                    clss = results[0].boxes.cls.cpu().numpy().tolist() if hasattr(results[0].boxes.cls, 'cpu') else results[0].boxes.cls
+                                    
+                                    # Ensure all data are in list format
+                                    if isinstance(boxes, (np.ndarray, torch.Tensor)):
+                                        boxes = boxes.tolist()
+                                    if isinstance(confs, (np.ndarray, torch.Tensor)):
+                                        confs = confs.tolist()
+                                    if isinstance(clss, (np.ndarray, torch.Tensor)):
+                                        clss = clss.tolist()
+                                        
+                                    final_boxes, final_scores, final_labels = boxes, confs, clss
+                                except Exception as e:
+                                    print(f"Error processing detection data: {e}")
+                
+                print(f"Final boxes count: {len(final_boxes)}")
                 
                 annotated_frame = frame.copy()
                 current_frame_detection_counts = {class_name: 0 for class_name in self.class_names} 
@@ -208,7 +277,7 @@ class RTMPProcessor:
                     if cls_name in total_detection_counts:
                         total_detection_counts[cls_name] += 1
 
-                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 1)
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
                     
                     label = f"{cls_name}: {score:.2f}"
                     if not self.is_ensemble and i < len(final_track_ids) and not isinstance(self.models[0], FasterRCNNWrapper):
