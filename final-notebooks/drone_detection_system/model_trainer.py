@@ -16,15 +16,29 @@ class ModelTrainer:
                   batch_size=16, 
                   img_size=640, 
                   num_gpus=1):
-        if num_gpus <= 0:
+        # Validate the number of available GPUs
+        available_gpus = torch.cuda.device_count()
+        if available_gpus == 0:
+            print("No GPUs detected. Training will use CPU, which may be very slow.")
+            device_str = 'cpu'
+            run_name = f"yolo11{model_size}_visdrone_CPU"
+            effective_batch_per_gpu = batch_size
+        elif num_gpus <= 0:
             print("Number of GPUs must be positive. Defaulting to 1 GPU.")
             device_str = '0'
             run_name = f"yolo11{model_size}_visdrone_1GPU"
             effective_batch_per_gpu = batch_size
+        elif num_gpus > available_gpus:
+            print(f"Warning: Requested {num_gpus} GPUs but only {available_gpus} are available.")
+            print(f"Using all {available_gpus} available GPUs.")
+            num_gpus = available_gpus
+            device_str = ','.join(map(str, range(num_gpus)))
+            run_name = f"yolo11{model_size}_visdrone_{num_gpus}GPU"
+            effective_batch_per_gpu = batch_size // num_gpus
         elif num_gpus == 1:
-             device_str = '0'
-             run_name = f"yolo11{model_size}_visdrone_1GPU"
-             effective_batch_per_gpu = batch_size
+            device_str = '0'
+            run_name = f"yolo11{model_size}_visdrone_1GPU"
+            effective_batch_per_gpu = batch_size
         else:
             device_str = ','.join(map(str, range(num_gpus)))
             run_name = f"yolo11{model_size}_visdrone_{num_gpus}GPU"

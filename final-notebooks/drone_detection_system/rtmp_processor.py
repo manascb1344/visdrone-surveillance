@@ -25,12 +25,27 @@ class RTMPProcessor:
             (128, 0, 128)   
         ]
         
+        # Initialize models list and is_ensemble flag
+        self.models = []
+        self.is_ensemble = False
+        
         try:
-            self.model = YOLO(model_path)
-            print(f"Model loaded from: {model_path}")
+            # If model_path is a list, we'll use ensemble mode
+            if isinstance(model_path, list):
+                self.is_ensemble = True
+                for path in model_path:
+                    model = YOLO(path)
+                    self.models.append(model)
+                print(f"Ensemble of {len(self.models)} models loaded")
+            else:
+                # Single model mode
+                self.model = YOLO(model_path)
+                self.models = [self.model]  # Add to models list for consistent access
+                print(f"Model loaded from: {model_path}")
         except Exception as e:
             print(f"Error loading model: {e}")
             self.model = None
+            self.models = []
             
     def install_ffmpeg(self):
         try:
@@ -212,7 +227,8 @@ class RTMPProcessor:
                 "fps": frame_count / elapsed_time if elapsed_time > 0 else 0,
                 "total_detection_counts": total_detection_counts, 
                 "sorted_total_detections": sorted([(k,v) for k,v in total_detection_counts.items() if v > 0], key=lambda item: item[1], reverse=True),
-                "frames_to_display": frames_to_display
+                "frames_to_display": frames_to_display,
+                "total_unique_tracks": len(unique_track_ids) if not self.is_ensemble else None  # Add this field
             }
             return results
 
@@ -223,6 +239,57 @@ class RTMPProcessor:
         finally:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
+                
+    def _apply_ensemble_nms(self, boxes, scores, labels, iou_threshold=0.5):
+        """
+        Apply non-maximum suppression to ensemble predictions
+        """
+        if not boxes:
+            return [], [], []
+            
+        # Convert to numpy arrays for processing
+        boxes = np.array(boxes)
+        scores = np.array(scores)
+        labels = np.array(labels)
+        
+        # Apply NMS per class
+        final_boxes = []
+        final_scores = []
+        final_labels = []
+        
+        for class_id in np.unique(labels):
+            # Get detections for this class
+            mask = labels == class_id
+            class_boxes = boxes[mask]
+            class_scores = scores[mask]
+            class_labels = labels[mask]
+            
+            # Apply NMS
+            indices = cv2.dnn.NMSBoxes(
+                class_boxes.tolist(), 
+                class_scores.tolist(), 
+                score_threshold=0.1,  # Low threshold as we already filtered
+                nms_threshold=iou_threshold
+            )
+            
+            # Convert from OpenCV 4.x format if needed
+            if isinstance(indices, tuple) and len(indices) == 1:
+                indices = indices[0]
+            
+            # Add to final results
+            if len(indices) > 0:
+                for idx in indices:
+                    # Handle different return types from OpenCV versions
+                    if isinstance(idx, np.ndarray):
+                        idx = idx.item()
+                    elif isinstance(idx, (list, tuple)) and len(idx) > 0:
+                        idx = idx[0]
+                        
+                    final_boxes.append(class_boxes[idx].tolist())
+                    final_scores.append(class_scores[idx].item())
+                    final_labels.append(class_labels[idx].item())
+        
+        return final_boxes, final_scores, final_labels
                 
     def display_results(self, results):
         if not results:
@@ -245,7 +312,8 @@ class RTMPProcessor:
 
         print(f"\nProcessing completed. Total frames: {results['frame_count']}")
         print(f"Average FPS: {results['fps']:.2f}")
-        print(f"Total Unique Objects Tracked: {results['total_unique_tracks']}") 
+        if 'total_unique_tracks' in results and results['total_unique_tracks'] is not None:
+            print(f"Total Unique Objects Tracked: {results['total_unique_tracks']}")
             
     def _get_control_commands(self, frame_center_x, frame_center_y, target_box, target_area_ratio_threshold=0.05, dead_zone_ratio=0.1):
         if target_box is None:

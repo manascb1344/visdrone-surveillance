@@ -156,13 +156,18 @@ def main():
             processor.display_results(results)
             
     elif args.mode == 'export':
-        if not args.model_path or not args.model_path.endswith('.pt'):
+        if not args.model_path:
             print("Error: --model-path pointing to a .pt file is required for export mode")
             return
             
-        print(f"Exporting model {args.model_path} to {args.export_format} format...")
+        model_path = args.model_path[0]  # Get the first model path from the list
+        if not model_path.endswith('.pt'):
+            print("Error: Model path must point to a .pt file for export mode")
+            return
+            
+        print(f"Exporting model {model_path} to {args.export_format} format...")
         try:
-            model = YOLO(args.model_path) 
+            model = YOLO(model_path) 
             export_path = model.export(format=args.export_format)
             print(f"Model exported successfully to: {export_path}")
         except Exception as e:
