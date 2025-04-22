@@ -29,17 +29,14 @@ class DataManager:
         self.class_names = ['person', 'bicycle', 'car', 'van', 'truck', 'tricycle', 'bus', 'motorcycle']
 
     def download_visdrone(self):
-        print("Downloading VisDrone dataset...")
         os.makedirs(self.visdrone_path, exist_ok=True)
 
         os.system(f"wget -c https://github.com/ultralytics/assets/releases/download/v0.0.0/VisDrone2019-DET-train.zip -P {self.visdrone_path}/")
         os.system(f"wget -c https://github.com/ultralytics/assets/releases/download/v0.0.0/VisDrone2019-DET-val.zip -P {self.visdrone_path}/")
 
-        print("Extracting dataset files...")
         os.system(f"unzip -oq {self.visdrone_path}/VisDrone2019-DET-train.zip -d {self.visdrone_path}/")
         os.system(f"unzip -oq {self.visdrone_path}/VisDrone2019-DET-val.zip -d {self.visdrone_path}/")
 
-        print("VisDrone dataset downloaded and extracted.")
         return self.visdrone_path
 
     def convert_visdrone_to_yolo(self):

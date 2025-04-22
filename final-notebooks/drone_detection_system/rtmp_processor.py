@@ -27,12 +27,10 @@ class RTMPProcessor:
             (128, 0, 128)   
         ]
         
-        # Initialize models list and is_ensemble flag
         self.models = []
         self.is_ensemble = False
         
         try:
-            # If model_path is a list, we'll use ensemble mode
             if isinstance(model_path, list):
                 self.is_ensemble = True
                 for path in model_path:
@@ -43,30 +41,19 @@ class RTMPProcessor:
                     self.models.append(model)
                 print(f"Ensemble of {len(self.models)} models loaded")
             else:
-                # Single model mode
                 if self.model_type == 'faster_rcnn':
                     self.model = FasterRCNNWrapper(model_path, class_names=self.class_names)
                 elif self.model_type == 'auto' and 'faster_rcnn' in model_path.lower():
                     self.model = FasterRCNNWrapper(model_path, class_names=self.class_names)
                 else:
                     self.model = YOLO(model_path)
-                self.models = [self.model]  # Add to models list for consistent access
+                self.models = [self.model]
                 print(f"Model loaded from: {model_path}")
         except Exception as e:
             print(f"Error loading model: {e}")
             self.model = None
             self.models = []
-            
-    def install_ffmpeg(self):
-        try:
-            print("Installing FFmpeg...")
-            os.system("apt-get update -qq && apt-get install -y ffmpeg")
-            print("FFmpeg installed successfully")
-            return True
-        except Exception as e:
-            print(f"Error installing FFmpeg: {e}")
-            return False
-            
+                        
     def process_feed(self, rtmp_url, output_path=None, confidence_threshold=0.25, max_frames=300, nms_iou_threshold=0.5, follow_target_id=None, realtime_display=False, max_frame_skip=5):
         if self.model is None:
             print("Error: Model not loaded.")
@@ -85,13 +72,9 @@ class RTMPProcessor:
         try:
             if realtime_display:
                 print("Starting real-time RTMP stream processing...")
-                # Connect directly to the RTMP stream for real-time processing
                 cap = cv2.VideoCapture(rtmp_url)
-                
-                # Set buffer size to minimize latency for real-time display
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             else:
-                # Original behavior - download a segment first to test
                 temp_file = "/tmp/rtmp_temp.mp4"
                 print("Downloading a segment from the RTMP stream for testing...")
                 os.system(f"ffmpeg -hide_banner -loglevel error -y -i {rtmp_url} -t 10 -c copy {temp_file}")
@@ -133,15 +116,12 @@ class RTMPProcessor:
             process_times = []
 
             while cap.isOpened() and (frame_count < max_frames or realtime_display):
-                # For real-time display, check if we're falling behind
                 if realtime_display and len(process_times) > 0:
                     avg_process_time = sum(process_times) / len(process_times)
-                    frame_interval = 1.0 / fps if fps > 0 else 0.033  # Default to ~30fps if unknown
+                    frame_interval = 1.0 / fps if fps > 0 else 0.033
                     
-                    # If processing is taking longer than frame interval, we need to skip frames
                     if avg_process_time > frame_interval:
                         skip_count = min(int(avg_process_time / frame_interval), max_frame_skip)
-                        # Skip frames to catch up to real-time
                         for _ in range(skip_count):
                             ret, _ = cap.read()
                             if not ret:
@@ -149,7 +129,6 @@ class RTMPProcessor:
                             frame_count += 1
                             skipped_frames += 1
                 
-                # Read the next frame
                 ret, frame = cap.read()
                 if not ret: 
                     break
@@ -169,7 +148,6 @@ class RTMPProcessor:
                     all_pred_labels = []
                     for model in self.models:
                         results = model.predict(frame, conf=confidence_threshold, verbose=False)
-                        # Check if results is not empty and has valid boxes
                         if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
                             all_pred_boxes.extend(results[0].boxes.xyxy.cpu().tolist())
                             all_pred_scores.extend(results[0].boxes.conf.cpu().tolist())
@@ -181,22 +159,17 @@ class RTMPProcessor:
                 else: 
                     model = self.models[0]
                     
-                    # Handle differently if Faster R-CNN or YOLO
                     if isinstance(model, FasterRCNNWrapper):
-                        # FasterRCNNWrapper doesn't support tracking
                         results = model.predict(frame, conf=confidence_threshold, verbose=False)
                         
-                        # Check if results is not empty and has valid boxes
                         if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
                             boxes = results[0].boxes.xyxy.cpu().tolist()
                             confs = results[0].boxes.conf.cpu().tolist()
                             clss = results[0].boxes.cls.cpu().tolist()
                             final_boxes, final_scores, final_labels = boxes, confs, clss
                     else:
-                        # YOLO with tracking
                         results = model.track(frame, persist=True, conf=confidence_threshold, verbose=False)
                         
-                        # Check if results is not empty and has valid boxes with IDs
                         if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
                             if hasattr(results[0].boxes, 'id') and results[0].boxes.id is not None: 
                                 boxes_data = results[0].boxes.data.cpu() 
@@ -238,7 +211,6 @@ class RTMPProcessor:
                     cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 1)
                     
                     label = f"{cls_name}: {score:.2f}"
-                    # Only show track IDs for YOLO model in single model mode
                     if not self.is_ensemble and i < len(final_track_ids) and not isinstance(self.models[0], FasterRCNNWrapper):
                         label = f"ID:{final_track_ids[i]} {label}"
                     
@@ -247,7 +219,6 @@ class RTMPProcessor:
                     cv2.putText(annotated_frame, label, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 
                 drone_command = "N/A" 
-                # Following only works with single YOLO model
                 if follow_target_id is not None and not self.is_ensemble and not isinstance(self.models[0], FasterRCNNWrapper):
                     drone_command = self._get_control_commands(
                         frame_center_x, frame_center_y, target_box_coords 
@@ -274,28 +245,23 @@ class RTMPProcessor:
                     cv2.putText(annotated_frame, model_info, (15, y_offset+20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
                     y_offset += 40
                 
-                # Display detections count on frame
                 for cls_name, count in {k: current_frame_detection_counts[k] for k in current_frame_detection_counts if current_frame_detection_counts[k] > 0}.items():
                     cv2.rectangle(annotated_frame, (10, y_offset), (180, y_offset+30), (0, 0, 0), -1)
                     cv2.putText(annotated_frame, f"{cls_name}: {count}", (15, y_offset+20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
                     y_offset += 40
                 
-                # Calculate and track processing time
                 process_end = time.time()
                 process_time = process_end - process_start
                 process_times.append(process_time)
-                if len(process_times) > 30:  # Keep a rolling average of recent frames
+                if len(process_times) > 30:
                     process_times.pop(0)
                 
                 processed_count += 1
                 
-                # Display real-time window
                 if realtime_display:
                     cv2.imshow('Real-time Drone Detection', annotated_frame)
-                    # Press 'q' to exit the real-time display
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         break
-                # Save frames for display at the end if not in real-time mode
                 elif frame_count % 10 == 0 or frame_count < 5: 
                     frames_to_display.append(annotated_frame.copy())
                 
@@ -306,7 +272,6 @@ class RTMPProcessor:
                     avg_process = sum(process_times) / len(process_times) if process_times else 0
                     print(f"Processed {processed_count}/{frame_count} frames (skipped {skipped_frames}). FPS: {fps_actual:.1f}, Avg process time: {avg_process:.3f}s")
                     
-            # Release resources
             cap.release()
             
             if out:
@@ -338,45 +303,35 @@ class RTMPProcessor:
                 os.remove(temp_file)
                 
     def _apply_ensemble_nms(self, boxes, scores, labels, iou_threshold=0.5):
-        """
-        Apply non-maximum suppression to ensemble predictions
-        """
         if not boxes:
             return [], [], []
             
-        # Convert to numpy arrays for processing
         boxes = np.array(boxes)
         scores = np.array(scores)
         labels = np.array(labels)
         
-        # Apply NMS per class
         final_boxes = []
         final_scores = []
         final_labels = []
         
         for class_id in np.unique(labels):
-            # Get detections for this class
             mask = labels == class_id
             class_boxes = boxes[mask]
             class_scores = scores[mask]
             class_labels = labels[mask]
             
-            # Apply NMS
             indices = cv2.dnn.NMSBoxes(
                 class_boxes.tolist(), 
                 class_scores.tolist(), 
-                score_threshold=0.1,  # Low threshold as we already filtered
+                score_threshold=0.1,
                 nms_threshold=iou_threshold
             )
             
-            # Convert from OpenCV 4.x format if needed
             if isinstance(indices, tuple) and len(indices) == 1:
                 indices = indices[0]
             
-            # Add to final results
             if len(indices) > 0:
                 for idx in indices:
-                    # Handle different return types from OpenCV versions
                     if isinstance(idx, np.ndarray):
                         idx = idx.item()
                     elif isinstance(idx, (list, tuple)) and len(idx) > 0:
@@ -447,7 +402,6 @@ class RTMPProcessor:
             commands.append("Move Forward")
         elif target_area_ratio > (target_area_ratio_threshold * 1.2): 
             commands.append("Move Backward")
-            
 
         if not commands:
             return "Hold Position"

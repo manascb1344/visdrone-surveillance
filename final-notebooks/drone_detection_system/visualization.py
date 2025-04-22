@@ -9,17 +9,8 @@ from IPython.display import display, Image
 import itertools
 
 class Visualizer:
-    """
-    Class for visualizing training results and model predictions.
-    """
 
     def __init__(self, class_names=None):
-        """
-        Initialize the visualizer.
-
-        Args:
-            class_names (list, optional): List of class names
-        """
         self.class_names = class_names or [
             'person', 'bicycle', 'car', 'van',
             'truck', 'tricycle', 'bus', 'motorcycle'
@@ -39,12 +30,6 @@ class Visualizer:
         ]
 
     def visualize_training_results(self, results_path):
-        """
-        Display training results from a CSV file.
-
-        Args:
-            results_path (str): Path to the results.csv file
-        """
         try:
             results = pd.read_csv(results_path)
 
@@ -87,18 +72,6 @@ class Visualizer:
             return False
 
     def test_model_on_samples(self, model_path, sample_dir, num_samples=5, conf_threshold=0.25):
-        """
-        Test one or more trained models on sample images (ensemble visualization).
-
-        Args:
-            model_path (list[str]): List of paths to the trained models.
-            sample_dir (str): Directory containing sample images.
-            num_samples (int): Number of samples to test.
-            conf_threshold (float): Confidence threshold for detection.
-
-        Returns:
-            bool: Success status.
-        """
         if not isinstance(model_path, list):
             model_path = [model_path]
 

@@ -93,7 +93,6 @@ def main():
             dataset_yaml = data_manager.convert_visdrone_to_yolo()
         
         if args.model_type == 'yolo':
-            # Create project directory based on model type
             yolo_project_dir = os.path.join(args.project_dir, "yolo")
             os.makedirs(yolo_project_dir, exist_ok=True)
             
@@ -131,12 +130,11 @@ def main():
             print(f"Training completed. Best YOLO model saved to {models_dir}")
             
         elif args.model_type == 'faster_rcnn':
-            # Create project directory based on model type
             faster_rcnn_project_dir = os.path.join(args.project_dir, "faster_rcnn")
             os.makedirs(faster_rcnn_project_dir, exist_ok=True)
             
             trainer = FasterRCNNTrainer(project_dir=faster_rcnn_project_dir)
-            result = trainer.train_faster_rcnn(
+            model = trainer.train_faster_rcnn(
                 dataset_yaml=dataset_yaml,
                 epochs=args.epochs,
                 batch_size=args.batch_size,
@@ -145,19 +143,22 @@ def main():
                 learning_rate=args.learning_rate
             )
             
-            visualizer = Visualizer()
-            results_csv = os.path.join(result['run_dir'], 'results.csv')
-            if os.path.exists(results_csv):
-                visualizer.visualize_training_results(results_csv)
-            
             models_dir = os.path.join(faster_rcnn_project_dir, "models")
-            trainer.save_model(
-                model_path=result['best_model_path'],
-                save_dir=models_dir,
-                new_name=f"visdrone_faster_rcnn.pt"
-            )
+            os.makedirs(models_dir, exist_ok=True)
+            model_path = os.path.join(models_dir, "visdrone_faster_rcnn.pt")
+            torch.save(model.state_dict(), model_path)
             
-            print(f"Training completed. Best Faster R-CNN model saved to {models_dir}")
+            val_dir = os.path.join(args.base_path, "visdrone", "VisDrone2019-DET-val", "images")
+            if os.path.exists(val_dir):
+                visualizer = Visualizer()
+                visualizer.test_model_on_samples(
+                    model_path=model_path,
+                    sample_dir=val_dir,
+                    num_samples=5,
+                    conf_threshold=args.conf_threshold
+                )
+            
+            print(f"Training completed. Faster R-CNN model saved to {model_path}")
         
     elif args.mode == 'test':
         if not args.model_path:
@@ -186,23 +187,17 @@ def main():
             print("Error: --follow-id can only be used with a single model path (ensemble mode not supported for following).")
             return
             
-        # Detect if using Faster R-CNN model
         is_faster_rcnn = any("faster_rcnn" in path for path in args.model_path)
         
-        # Prevent using --follow-id with Faster R-CNN models
         if is_faster_rcnn and args.follow_id is not None:
             print("Error: --follow-id is not supported with Faster R-CNN models.")
             return
             
         if is_faster_rcnn and len(args.model_path) == 1:
-            # Process with a single Faster R-CNN model
             processor = RTMPProcessor(model_path=args.model_path[0], model_type='faster_rcnn')
         else:
-            # Process with YOLO or ensemble
             processor = RTMPProcessor(model_path=args.model_path[0] if len(args.model_path) == 1 else args.model_path)
-        
-        processor.install_ffmpeg()
-        
+                
         results = processor.process_feed(
             rtmp_url=args.rtmp_url,
             output_path=args.output_video,
@@ -220,12 +215,11 @@ def main():
             print("Error: --model-path pointing to a .pt file is required for export mode")
             return
             
-        model_path = args.model_path[0]  # Get the first model path from the list
+        model_path = args.model_path[0]
         if not model_path.endswith('.pt'):
             print("Error: Model path must point to a .pt file for export mode")
             return
             
-        # Check if model is Faster R-CNN
         if "faster_rcnn" in model_path:
             print("Export not currently supported for Faster R-CNN models")
             return
