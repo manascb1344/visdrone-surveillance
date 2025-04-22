@@ -4,11 +4,13 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
+from faster_rcnn import FasterRCNNWrapper
 
 class RTMPProcessor:
     
-    def __init__(self, model_path, class_names=None):
+    def __init__(self, model_path, class_names=None, model_type='yolo'):
         self.model_path = model_path
+        self.model_type = model_type
         self.class_names = class_names or [
             'person', 'bicycle', 'car', 'van', 
             'truck', 'tricycle', 'bus', 'motorcycle'
@@ -34,12 +36,20 @@ class RTMPProcessor:
             if isinstance(model_path, list):
                 self.is_ensemble = True
                 for path in model_path:
-                    model = YOLO(path)
+                    if 'faster_rcnn' in path.lower():
+                        model = FasterRCNNWrapper(path, class_names=self.class_names)
+                    else:
+                        model = YOLO(path)
                     self.models.append(model)
                 print(f"Ensemble of {len(self.models)} models loaded")
             else:
                 # Single model mode
-                self.model = YOLO(model_path)
+                if self.model_type == 'faster_rcnn':
+                    self.model = FasterRCNNWrapper(model_path, class_names=self.class_names)
+                elif self.model_type == 'auto' and 'faster_rcnn' in model_path.lower():
+                    self.model = FasterRCNNWrapper(model_path, class_names=self.class_names)
+                else:
+                    self.model = YOLO(model_path)
                 self.models = [self.model]  # Add to models list for consistent access
                 print(f"Model loaded from: {model_path}")
         except Exception as e:
@@ -127,7 +137,8 @@ class RTMPProcessor:
                     all_pred_labels = []
                     for model in self.models:
                         results = model.predict(frame, conf=confidence_threshold, verbose=False)
-                        if results[0].boxes is not None:
+                        # Check if results is not empty and has valid boxes
+                        if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
                             all_pred_boxes.extend(results[0].boxes.xyxy.cpu().tolist())
                             all_pred_scores.extend(results[0].boxes.conf.cpu().tolist())
                             all_pred_labels.extend(results[0].boxes.cls.cpu().tolist())
@@ -137,28 +148,44 @@ class RTMPProcessor:
                     )
                 else: 
                     model = self.models[0]
-                    results = model.track(frame, persist=True, conf=confidence_threshold, verbose=False)
                     
-                    if results[0].boxes is not None and results[0].boxes.id is not None: 
-                         boxes_data = results[0].boxes.data.cpu() 
-                         for row in boxes_data:
-                             box = row[:4].tolist()
-                             track_id = int(row[4])
-                             conf = float(row[5])
-                             cls_id = int(row[6])
-                             
-                             final_boxes.append(box)
-                             final_scores.append(conf)
-                             final_labels.append(cls_id)
-                             final_track_ids.append(track_id)
-                             
-                             if follow_target_id is not None and track_id == follow_target_id:
-                                 target_box_coords = box 
-                    elif results[0].boxes is not None:
-                         boxes = results[0].boxes.xyxy.cpu().tolist()
-                         confs = results[0].boxes.conf.cpu().tolist()
-                         clss = results[0].boxes.cls.cpu().tolist()
-                         final_boxes, final_scores, final_labels = boxes, confs, clss
+                    # Handle differently if Faster R-CNN or YOLO
+                    if isinstance(model, FasterRCNNWrapper):
+                        # FasterRCNNWrapper doesn't support tracking
+                        results = model.predict(frame, conf=confidence_threshold, verbose=False)
+                        
+                        # Check if results is not empty and has valid boxes
+                        if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
+                            boxes = results[0].boxes.xyxy.cpu().tolist()
+                            confs = results[0].boxes.conf.cpu().tolist()
+                            clss = results[0].boxes.cls.cpu().tolist()
+                            final_boxes, final_scores, final_labels = boxes, confs, clss
+                    else:
+                        # YOLO with tracking
+                        results = model.track(frame, persist=True, conf=confidence_threshold, verbose=False)
+                        
+                        # Check if results is not empty and has valid boxes with IDs
+                        if results and len(results) > 0 and hasattr(results[0], 'boxes') and results[0].boxes is not None:
+                            if hasattr(results[0].boxes, 'id') and results[0].boxes.id is not None: 
+                                boxes_data = results[0].boxes.data.cpu() 
+                                for row in boxes_data:
+                                    box = row[:4].tolist()
+                                    track_id = int(row[4])
+                                    conf = float(row[5])
+                                    cls_id = int(row[6])
+                                    
+                                    final_boxes.append(box)
+                                    final_scores.append(conf)
+                                    final_labels.append(cls_id)
+                                    final_track_ids.append(track_id)
+                                    
+                                    if follow_target_id is not None and track_id == follow_target_id:
+                                        target_box_coords = box 
+                            elif hasattr(results[0].boxes, 'xyxy'):
+                                boxes = results[0].boxes.xyxy.cpu().tolist()
+                                confs = results[0].boxes.conf.cpu().tolist()
+                                clss = results[0].boxes.cls.cpu().tolist()
+                                final_boxes, final_scores, final_labels = boxes, confs, clss
                 
                 annotated_frame = frame.copy()
                 current_frame_detection_counts = {class_name: 0 for class_name in self.class_names} 
@@ -178,7 +205,8 @@ class RTMPProcessor:
                     cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
                     
                     label = f"{cls_name}: {score:.2f}"
-                    if not self.is_ensemble and i < len(final_track_ids):
+                    # Only show track IDs for YOLO model in single model mode
+                    if not self.is_ensemble and i < len(final_track_ids) and not isinstance(self.models[0], FasterRCNNWrapper):
                         label = f"ID:{final_track_ids[i]} {label}"
                     
                     text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
@@ -186,7 +214,8 @@ class RTMPProcessor:
                     cv2.putText(annotated_frame, label, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
                 
                 drone_command = "N/A" 
-                if follow_target_id is not None and not self.is_ensemble:
+                # Following only works with single YOLO model
+                if follow_target_id is not None and not self.is_ensemble and not isinstance(self.models[0], FasterRCNNWrapper):
                     drone_command = self._get_control_commands(
                         frame_center_x, frame_center_y, target_box_coords 
                     )
@@ -202,21 +231,35 @@ class RTMPProcessor:
                 
                 y_offset = 50
                 if self.is_ensemble:
-                     num_current_detections = len(final_boxes)
-                     cv2.rectangle(annotated_frame, (10, y_offset), (250, y_offset + 30), (0, 0, 0), -1)
-                     cv2.putText(annotated_frame, f"Detections: {num_current_detections}", (15, y_offset + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-                else: 
-                     active_tracks_count = len(final_track_ids)
-                     cv2.rectangle(annotated_frame, (10, y_offset), (250, y_offset + 30), (0, 0, 0), -1)
-                     cv2.putText(annotated_frame, f"Active Tracks: {active_tracks_count}", (15, y_offset + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-
+                    ensemble_info = "Ensemble Mode"
+                    cv2.rectangle(annotated_frame, (10, y_offset), (180, y_offset+30), (0, 0, 0), -1)
+                    cv2.putText(annotated_frame, ensemble_info, (15, y_offset+20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                    y_offset += 40
+                elif isinstance(self.models[0], FasterRCNNWrapper):
+                    model_info = "Faster R-CNN"
+                    cv2.rectangle(annotated_frame, (10, y_offset), (180, y_offset+30), (0, 0, 0), -1)
+                    cv2.putText(annotated_frame, model_info, (15, y_offset+20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                    y_offset += 40
+                
+                # Display detections count on frame
+                for cls_name, count in {k: current_frame_detection_counts[k] for k in current_frame_detection_counts if current_frame_detection_counts[k] > 0}.items():
+                    cv2.rectangle(annotated_frame, (10, y_offset), (180, y_offset+30), (0, 0, 0), -1)
+                    cv2.putText(annotated_frame, f"{cls_name}: {count}", (15, y_offset+20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                    y_offset += 40
+                
+                # Save frames for display at the end
+                if frame_count % 10 == 0 or frame_count < 5: 
+                    frames_to_display.append(annotated_frame.copy())
+                
                 if out:
                     out.write(annotated_frame)
-
-                if frame_count % 10 == 0 or frame_count <= 5:  
-                    frames_to_display.append(annotated_frame)
-
+                
+                if frame_count % 10 == 0:
+                    print(f"Processed {frame_count} frames. FPS: {fps_actual:.1f}")
+                    
+            # Release resources
             cap.release()
+            
             if out:
                 out.release()
                 
@@ -228,7 +271,7 @@ class RTMPProcessor:
                 "total_detection_counts": total_detection_counts, 
                 "sorted_total_detections": sorted([(k,v) for k,v in total_detection_counts.items() if v > 0], key=lambda item: item[1], reverse=True),
                 "frames_to_display": frames_to_display,
-                "total_unique_tracks": len(unique_track_ids) if not self.is_ensemble else None  # Add this field
+                "total_unique_tracks": len(unique_track_ids) if not self.is_ensemble and not isinstance(self.models[0], FasterRCNNWrapper) else None  # Add this field
             }
             return results
 
