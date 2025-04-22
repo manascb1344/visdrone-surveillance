@@ -61,6 +61,12 @@ def parse_args():
     parser.add_argument('--follow-id', type=int, default=None,
                        help='Track ID of the object to generate follow commands for (single model RTMP mode only)')
     
+    parser.add_argument('--realtime-display', action='store_true',
+                       help='Display real-time processed video feed (RTMP mode only)')
+    
+    parser.add_argument('--max-frame-skip', type=int, default=5,
+                       help='Maximum number of frames to skip when processing can\'t keep up with the input feed (default: 5)')
+    
     return parser.parse_args()
 
 def main():
@@ -193,7 +199,7 @@ def main():
             processor = RTMPProcessor(model_path=args.model_path[0], model_type='faster_rcnn')
         else:
             # Process with YOLO or ensemble
-            processor = RTMPProcessor(model_path=args.model_path[0])
+            processor = RTMPProcessor(model_path=args.model_path[0] if len(args.model_path) == 1 else args.model_path)
         
         processor.install_ffmpeg()
         
@@ -201,10 +207,12 @@ def main():
             rtmp_url=args.rtmp_url,
             output_path=args.output_video,
             confidence_threshold=args.conf_threshold,
-            follow_target_id=args.follow_id 
+            follow_target_id=args.follow_id,
+            realtime_display=args.realtime_display,
+            max_frame_skip=args.max_frame_skip
         )
         
-        if results:
+        if results and not args.realtime_display:
             processor.display_results(results)
             
     elif args.mode == 'export':

@@ -67,7 +67,7 @@ class RTMPProcessor:
             print(f"Error installing FFmpeg: {e}")
             return False
             
-    def process_feed(self, rtmp_url, output_path=None, confidence_threshold=0.25, max_frames=300, nms_iou_threshold=0.5, follow_target_id=None):
+    def process_feed(self, rtmp_url, output_path=None, confidence_threshold=0.25, max_frames=300, nms_iou_threshold=0.5, follow_target_id=None, realtime_display=False, max_frame_skip=5):
         if self.model is None:
             print("Error: Model not loaded.")
             return None
@@ -82,22 +82,29 @@ class RTMPProcessor:
             print("Error: No models available for processing.")
             return None
             
-        temp_file = "/tmp/rtmp_temp.mp4"
-
         try:
-            print("Downloading a segment from the RTMP stream for testing...")
-            os.system(f"ffmpeg -hide_banner -loglevel error -y -i {rtmp_url} -t 10 -c copy {temp_file}")
+            if realtime_display:
+                print("Starting real-time RTMP stream processing...")
+                # Connect directly to the RTMP stream for real-time processing
+                cap = cv2.VideoCapture(rtmp_url)
+                
+                # Set buffer size to minimize latency for real-time display
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            else:
+                # Original behavior - download a segment first to test
+                temp_file = "/tmp/rtmp_temp.mp4"
+                print("Downloading a segment from the RTMP stream for testing...")
+                os.system(f"ffmpeg -hide_banner -loglevel error -y -i {rtmp_url} -t 10 -c copy {temp_file}")
 
-            if not os.path.exists(temp_file) or os.path.getsize(temp_file) == 0:
-                print("Failed to download RTMP stream. Check your URL and network access.")
-                return None
+                if not os.path.exists(temp_file) or os.path.getsize(temp_file) == 0:
+                    print("Failed to download RTMP stream. Check your URL and network access.")
+                    return None
 
-            print(f"Successfully downloaded segment to {temp_file}")
-
-            cap = cv2.VideoCapture(temp_file)
+                print(f"Successfully downloaded segment to {temp_file}")
+                cap = cv2.VideoCapture(temp_file)
 
             if not cap.isOpened():
-                print("Error: Could not open video file.")
+                print("Error: Could not open video stream.")
                 return None
 
             frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -112,6 +119,8 @@ class RTMPProcessor:
                 out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
 
             frame_count = 0
+            processed_count = 0
+            skipped_frames = 0
             total_detection_counts = {class_name: 0 for class_name in self.class_names} 
             unique_track_ids = set() 
             start_time = time.time()
@@ -119,11 +128,34 @@ class RTMPProcessor:
 
             frame_center_x = frame_width / 2
             frame_center_y = frame_height / 2
+            
+            last_process_time = time.time()
+            process_times = []
 
-            while cap.isOpened() and frame_count < max_frames:
+            while cap.isOpened() and (frame_count < max_frames or realtime_display):
+                # For real-time display, check if we're falling behind
+                if realtime_display and len(process_times) > 0:
+                    avg_process_time = sum(process_times) / len(process_times)
+                    frame_interval = 1.0 / fps if fps > 0 else 0.033  # Default to ~30fps if unknown
+                    
+                    # If processing is taking longer than frame interval, we need to skip frames
+                    if avg_process_time > frame_interval:
+                        skip_count = min(int(avg_process_time / frame_interval), max_frame_skip)
+                        # Skip frames to catch up to real-time
+                        for _ in range(skip_count):
+                            ret, _ = cap.read()
+                            if not ret:
+                                break
+                            frame_count += 1
+                            skipped_frames += 1
+                
+                # Read the next frame
                 ret, frame = cap.read()
-                if not ret: break
+                if not ret: 
+                    break
+                
                 frame_count += 1
+                process_start = time.time()
 
                 target_box_coords = None 
                 final_boxes = []
@@ -178,6 +210,7 @@ class RTMPProcessor:
                                     final_scores.append(conf)
                                     final_labels.append(cls_id)
                                     final_track_ids.append(track_id)
+                                    unique_track_ids.add(track_id)
                                     
                                     if follow_target_id is not None and track_id == follow_target_id:
                                         target_box_coords = box 
@@ -202,7 +235,7 @@ class RTMPProcessor:
                     if cls_name in total_detection_counts:
                         total_detection_counts[cls_name] += 1
 
-                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 1)
                     
                     label = f"{cls_name}: {score:.2f}"
                     # Only show track IDs for YOLO model in single model mode
@@ -211,7 +244,7 @@ class RTMPProcessor:
                     
                     text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
                     cv2.rectangle(annotated_frame, (x1, y1-text_size[1]-5), (x1+text_size[0], y1), color, -1)
-                    cv2.putText(annotated_frame, label, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                    cv2.putText(annotated_frame, label, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 
                 drone_command = "N/A" 
                 # Following only works with single YOLO model
@@ -225,9 +258,9 @@ class RTMPProcessor:
                     cv2.putText(annotated_frame, f"CMD: {drone_command}", cmd_text_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2) 
                 
                 elapsed_time = time.time() - start_time
-                fps_actual = frame_count / elapsed_time if elapsed_time > 0 else 0
-                cv2.rectangle(annotated_frame, (10, 10), (200, 40), (0, 0, 0), -1)
-                cv2.putText(annotated_frame, f"FPS: {fps_actual:.1f}", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                fps_actual = processed_count / elapsed_time if elapsed_time > 0 else 0
+                cv2.rectangle(annotated_frame, (10, 10), (250, 40), (0, 0, 0), -1)
+                cv2.putText(annotated_frame, f"FPS: {fps_actual:.1f} ({skipped_frames} skipped)", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
                 y_offset = 50
                 if self.is_ensemble:
@@ -247,31 +280,52 @@ class RTMPProcessor:
                     cv2.putText(annotated_frame, f"{cls_name}: {count}", (15, y_offset+20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
                     y_offset += 40
                 
-                # Save frames for display at the end
-                if frame_count % 10 == 0 or frame_count < 5: 
+                # Calculate and track processing time
+                process_end = time.time()
+                process_time = process_end - process_start
+                process_times.append(process_time)
+                if len(process_times) > 30:  # Keep a rolling average of recent frames
+                    process_times.pop(0)
+                
+                processed_count += 1
+                
+                # Display real-time window
+                if realtime_display:
+                    cv2.imshow('Real-time Drone Detection', annotated_frame)
+                    # Press 'q' to exit the real-time display
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+                # Save frames for display at the end if not in real-time mode
+                elif frame_count % 10 == 0 or frame_count < 5: 
                     frames_to_display.append(annotated_frame.copy())
                 
                 if out:
                     out.write(annotated_frame)
                 
                 if frame_count % 10 == 0:
-                    print(f"Processed {frame_count} frames. FPS: {fps_actual:.1f}")
+                    avg_process = sum(process_times) / len(process_times) if process_times else 0
+                    print(f"Processed {processed_count}/{frame_count} frames (skipped {skipped_frames}). FPS: {fps_actual:.1f}, Avg process time: {avg_process:.3f}s")
                     
             # Release resources
             cap.release()
             
             if out:
                 out.release()
+            
+            if realtime_display:
+                cv2.destroyAllWindows()
                 
             elapsed_time = time.time() - start_time
             results = {
                 "frame_count": frame_count,
+                "processed_count": processed_count,
+                "skipped_frames": skipped_frames,
                 "elapsed_time": elapsed_time,
-                "fps": frame_count / elapsed_time if elapsed_time > 0 else 0,
+                "fps": processed_count / elapsed_time if elapsed_time > 0 else 0,
                 "total_detection_counts": total_detection_counts, 
                 "sorted_total_detections": sorted([(k,v) for k,v in total_detection_counts.items() if v > 0], key=lambda item: item[1], reverse=True),
-                "frames_to_display": frames_to_display,
-                "total_unique_tracks": len(unique_track_ids) if not self.is_ensemble and not isinstance(self.models[0], FasterRCNNWrapper) else None  # Add this field
+                "frames_to_display": frames_to_display if not realtime_display else [],
+                "total_unique_tracks": len(unique_track_ids) if not self.is_ensemble and not isinstance(self.models[0], FasterRCNNWrapper) else None
             }
             return results
 
@@ -280,7 +334,7 @@ class RTMPProcessor:
             return None
 
         finally:
-            if os.path.exists(temp_file):
+            if not realtime_display and 'temp_file' in locals() and os.path.exists(temp_file):
                 os.remove(temp_file)
                 
     def _apply_ensemble_nms(self, boxes, scores, labels, iou_threshold=0.5):

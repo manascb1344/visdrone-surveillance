@@ -124,12 +124,20 @@ python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rt
 # Process with a single YOLO model - tracking with "follow" commands for a specific track ID
 python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --follow-id 5
 
+# Process with a single YOLO model - real-time display of processed video feed
+python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --realtime-display
+
+# Process with a single YOLO model - real-time display with frame skipping for better performance
+python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --realtime-display --max-frame-skip 10
+
 # Process with a single Faster R-CNN model - no tracking IDs
 python main.py --mode rtmp --model-path ./train_runs/faster_rcnn/weights/best.pt --rtmp-url rtmp://YOUR_STREAM_URL --output-video ./output_rcnn.mp4
 
 # Process with an ensemble of models - NMS detection, no tracking IDs, no following
 python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.pt ./train_runs/faster_rcnn/weights/best.pt --rtmp-url rtmp://YOUR_STREAM_URL --output-video ./output_ensemble.mp4
 ```
+
+You can combine options like `--realtime-display` with `--output-video` to simultaneously view and save the processed feed.
 
 ## Example Workflow
 
