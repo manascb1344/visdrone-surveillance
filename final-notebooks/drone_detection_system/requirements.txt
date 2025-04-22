@@ -8,3 +8,6 @@ onnx>=1.12.0
 onnxruntime>=1.10.0 
 onnxslim
 onnxruntime-gpu
+torch>=1.10.0
+torchvision>=0.11.0
+pillow>=8.0.0

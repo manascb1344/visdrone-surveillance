@@ -9,6 +9,7 @@ from model_trainer import ModelTrainer
 from visualization import Visualizer
 from rtmp_processor import RTMPProcessor
 from ultralytics import YOLO
+from faster_rcnn import FasterRCNNTrainer, FasterRCNNWrapper
 
 def clear_gpu_memory():
     gc.collect()
@@ -30,8 +31,10 @@ def parse_args():
     parser.add_argument('--rtmp-url', type=str, default='rtmp://192.168.1.1/live/stream',
                        help='RTMP URL for live processing')
     
+    parser.add_argument('--model-type', type=str, default='yolo', choices=['yolo', 'faster_rcnn'],
+                       help='Detection model type to use (yolo or faster_rcnn)')
     parser.add_argument('--model-size', type=str, default='n', choices=['n', 's', 'm', 'l', 'x'],
-                       help='YOLO model size (n, s, m, l, x)')
+                       help='YOLO model size (n, s, m, l, x) - only used when model-type is yolo')
     parser.add_argument('--epochs', type=int, default=25,
                        help='Number of training epochs')
     parser.add_argument('--batch-size', type=int, default=64,
@@ -42,6 +45,8 @@ def parse_args():
                        help='Number of GPUs to use for training')
     parser.add_argument('--conf-threshold', type=float, default=0.25,
                        help='Confidence threshold for detections')
+    parser.add_argument('--learning-rate', type=float, default=0.001,
+                        help='Learning rate for Faster R-CNN training')
     
     parser.add_argument('--export-format', type=str, default='onnx', choices=['onnx', 'engine'],
                         help='Format to export the model to (onnx, engine for TensorRT)')
@@ -81,38 +86,72 @@ def main():
             data_manager.download_visdrone()
             dataset_yaml = data_manager.convert_visdrone_to_yolo()
         
-        trainer = ModelTrainer(project_dir=args.project_dir)
-        result = trainer.train_yolo(
-            dataset_yaml=dataset_yaml,
-            model_size=args.model_size,
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            img_size=args.img_size,
-            num_gpus=args.num_gpus
-        )
-        
-        visualizer = Visualizer()
-        results_csv = os.path.join(result['run_dir'], 'results.csv')
-        if os.path.exists(results_csv):
-            visualizer.visualize_training_results(results_csv)
-        
-        val_dir = os.path.join(args.base_path, "visdrone", "VisDrone2019-DET-val", "images")
-        if os.path.exists(val_dir):
-            visualizer.test_model_on_samples(
-                model_path=result['best_model_path'],
-                sample_dir=val_dir,
-                num_samples=5,
-                conf_threshold=args.conf_threshold
+        if args.model_type == 'yolo':
+            # Create project directory based on model type
+            yolo_project_dir = os.path.join(args.project_dir, "yolo")
+            os.makedirs(yolo_project_dir, exist_ok=True)
+            
+            trainer = ModelTrainer(project_dir=yolo_project_dir)
+            result = trainer.train_yolo(
+                dataset_yaml=dataset_yaml,
+                model_size=args.model_size,
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                img_size=args.img_size,
+                num_gpus=args.num_gpus
             )
-        
-        models_dir = os.path.join(args.project_dir, "models")
-        trainer.save_model(
-            model_path=result['best_model_path'],
-            save_dir=models_dir,
-            new_name=f"visdrone_yolo_{args.model_size}.pt"
-        )
-        
-        print(f"Training completed. Best model saved to {models_dir}")
+            
+            visualizer = Visualizer()
+            results_csv = os.path.join(result['run_dir'], 'results.csv')
+            if os.path.exists(results_csv):
+                visualizer.visualize_training_results(results_csv)
+            
+            val_dir = os.path.join(args.base_path, "visdrone", "VisDrone2019-DET-val", "images")
+            if os.path.exists(val_dir):
+                visualizer.test_model_on_samples(
+                    model_path=result['best_model_path'],
+                    sample_dir=val_dir,
+                    num_samples=5,
+                    conf_threshold=args.conf_threshold
+                )
+            
+            models_dir = os.path.join(yolo_project_dir, "models")
+            trainer.save_model(
+                model_path=result['best_model_path'],
+                save_dir=models_dir,
+                new_name=f"visdrone_yolo_{args.model_size}.pt"
+            )
+            
+            print(f"Training completed. Best YOLO model saved to {models_dir}")
+            
+        elif args.model_type == 'faster_rcnn':
+            # Create project directory based on model type
+            faster_rcnn_project_dir = os.path.join(args.project_dir, "faster_rcnn")
+            os.makedirs(faster_rcnn_project_dir, exist_ok=True)
+            
+            trainer = FasterRCNNTrainer(project_dir=faster_rcnn_project_dir)
+            result = trainer.train_faster_rcnn(
+                dataset_yaml=dataset_yaml,
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                img_size=args.img_size,
+                num_gpus=args.num_gpus,
+                learning_rate=args.learning_rate
+            )
+            
+            visualizer = Visualizer()
+            results_csv = os.path.join(result['run_dir'], 'results.csv')
+            if os.path.exists(results_csv):
+                visualizer.visualize_training_results(results_csv)
+            
+            models_dir = os.path.join(faster_rcnn_project_dir, "models")
+            trainer.save_model(
+                model_path=result['best_model_path'],
+                save_dir=models_dir,
+                new_name=f"visdrone_faster_rcnn.pt"
+            )
+            
+            print(f"Training completed. Best Faster R-CNN model saved to {models_dir}")
         
     elif args.mode == 'test':
         if not args.model_path:
@@ -141,7 +180,20 @@ def main():
             print("Error: --follow-id can only be used with a single model path (ensemble mode not supported for following).")
             return
             
-        processor = RTMPProcessor(model_path=args.model_path[0])
+        # Detect if using Faster R-CNN model
+        is_faster_rcnn = any("faster_rcnn" in path for path in args.model_path)
+        
+        # Prevent using --follow-id with Faster R-CNN models
+        if is_faster_rcnn and args.follow_id is not None:
+            print("Error: --follow-id is not supported with Faster R-CNN models.")
+            return
+            
+        if is_faster_rcnn and len(args.model_path) == 1:
+            # Process with a single Faster R-CNN model
+            processor = RTMPProcessor(model_path=args.model_path[0], model_type='faster_rcnn')
+        else:
+            # Process with YOLO or ensemble
+            processor = RTMPProcessor(model_path=args.model_path[0])
         
         processor.install_ffmpeg()
         
@@ -163,6 +215,11 @@ def main():
         model_path = args.model_path[0]  # Get the first model path from the list
         if not model_path.endswith('.pt'):
             print("Error: Model path must point to a .pt file for export mode")
+            return
+            
+        # Check if model is Faster R-CNN
+        if "faster_rcnn" in model_path:
+            print("Export not currently supported for Faster R-CNN models")
             return
             
         print(f"Exporting model {model_path} to {args.export_format} format...")
