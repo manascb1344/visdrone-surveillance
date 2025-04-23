@@ -1,175 +1,132 @@
 # Drone Detection System
 
-This project implements a drone-based object detection system using yolov11 and Faster R-CNN models trained on the VisDrone dataset. The system can process drone footage either from recorded files or RTMP streams, detecting objects like people, vehicles, and bicycles.
+This project implements a drone-based object detection system using YOLO (You Only Look Once) models trained on the VisDrone dataset. The system can process drone footage either from recorded files or RTMP streams, detecting objects like people, vehicles, and bicycles.
 
 ## Features
 
-- Downloads and prepares the VisDrone dataset for object detection
-- Trains yolov11 models with multi-GPU support
-- Trains Faster R-CNN models on the same dataset format
-- Implements NMS-based ensembling for detection using multiple trained models (Ensemble Mode)
-- Visualizes training results and model performance
-- Processes RTMP streams for real-time object detection with tracking (Single Model Mode) or ensembled detections (Ensemble Mode)
-- Generates drone movement commands for "following" specific objects (Single YOLO Model Mode only)
-- Exports models to optimized formats (ONNX, TensorRT)
+- Downloads and prepares VisDrone dataset for training
+- Trains YOLO models in various sizes (nano, small, medium, large, xlarge)
+- Processes drone footage from RTMP streams or video files
+- Provides visualization of detection results
+- Supports object tracking for following specific targets
+- Uses efficient batching and CUDA acceleration when available
 
-## Requirements
+## Dependencies
 
 - Python 3.8+
-- PyTorch 1.10+
+- PyTorch
 - OpenCV
-- Ultralytics (for YOLO models)
-- TorchVision (for Faster R-CNN models)
-- CUDA-capable GPU (recommended for training)
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/drone-detection-system.git
-cd drone-detection-system
-
-# Install dependencies
-pip install -r requirements.txt
-```
+- Ultralytics YOLO
+- NumPy
+- Matplotlib
 
 ## Project Structure
 
 ```
-├── main.py               # Main script for running operations
-├── data_manager.py       # Prepares and converts the VisDrone dataset
-├── model_trainer.py      # Trains the YOLO model
-├── faster_rcnn.py        # Trains the Faster R-CNN model
-├── visualization.py      # Visualizes results and model performance
-├── rtmp_processor.py     # Processes RTMP streams for real-time detection
-├── visdrone_yolo/        # Converted dataset directory
-│   ├── dataset.yaml      # Dataset configuration
-│   ├── images/           # Training and validation images
-│   └── labels/           # YOLO format labels
-└── visdrone_yolo_training/  # Training output directory
-    └── (training runs)
-└── visdrone_faster_rcnn_training/  # Faster R-CNN training output directory
-    └── (training runs)
+drone_detection_system/
+├── main.py             # Main entry point for all operations
+├── data_manager.py     # Downloads and prepares the VisDrone dataset
+├── model_trainer.py    # Trains the YOLO model
+├── visualization.py    # Visualizes training results and model predictions
+├── rtmp_processor.py   # Processes RTMP streams with trained models
+├── data/               # Dataset storage directory
+│   └── visdrone/       # VisDrone dataset
+│       ├── VisDrone2019-DET-train/
+│       ├── VisDrone2019-DET-val/
+│       └── VisDrone2019-DET-test/
+└── train_runs/         # Training output directory
+    └── yolo/           # YOLO training output directory
+        ├── weights/    # Trained model weights
+        └── models/     # Exported models for deployment
 ```
 
 ## Usage
 
-### 1. Prepare Mode
+### Preparing the Dataset
 
-Downloads and prepares the VisDrone dataset:
+Downloads and converts the VisDrone dataset into YOLO format:
 
 ```bash
 python main.py --mode prepare --base-path ./data
 ```
 
-### 2. Train Mode
+### Training Models
 
-Trains a model (YOLO or Faster R-CNN) on the prepared VisDrone dataset.
-
-#### Training YOLO models:
+Trains a YOLO model on the prepared VisDrone dataset.
 
 ```bash
-# Train a small YOLO model (yolov11n) for 50 epochs using 1 GPU
-python main.py --mode train --model-type yolo --model-size n --epochs 50 --num-gpus 1 --base-path ./data --project-dir ./train_runs
-
-# Train a medium YOLO model (yolov11m) for 100 epochs using 2 GPUs
-python main.py --mode train --model-type yolo --model-size m --epochs 100 --batch-size 32 --num-gpus 2 --base-path ./data --project-dir ./train_runs
+# Train a YOLOv8-nano model for 100 epochs using 1 GPU
+python main.py --mode train --model-type yolo --model-size n --epochs 100 --batch-size 16 --num-gpus 1 --base-path ./data --project-dir ./train_runs
 ```
 
-#### Training Faster R-CNN models:
+### Testing Trained Models
+
+Test a trained model on validation images:
 
 ```bash
-# Train a Faster R-CNN model for 50 epochs using 1 GPU
-python main.py --mode train --model-type faster_rcnn --epochs 50 --batch-size 8 --num-gpus 1 --base-path ./data --project-dir ./train_runs --learning-rate 0.001
-```
-
-### 3. Export Mode
-
-Exports a trained `.pt` model (from the YOLO training step) to an optimized format like ONNX or TensorRT (engine). Note: Export is currently only supported for YOLO models.
-
-```bash
-# Export the trained yolov11n model to ONNX format
-python main.py --mode export --model-path ./train_runs/yolo/weights/best.pt --export-format onnx
-
-# Export the trained yolov11m model to TensorRT engine format (requires TensorRT)
-python main.py --mode export --model-path ./train_runs/yolo/weights/best.pt --export-format engine
-```
-
-### 4. Test Mode
-
-Tests a trained model (or an ensemble) on sample images from a directory.
-
-```bash
-# Test a single YOLO model (.pt)
+# Test a YOLO model
 python main.py --mode test --model-path ./train_runs/yolo/weights/best.pt --sample-dir ./data/visdrone/VisDrone2019-DET-val/images
-
-# Test an exported YOLO model (.onnx)
-python main.py --mode test --model-path ./train_runs/yolo/weights/best.onnx --sample-dir ./data/visdrone/VisDrone2019-DET-val/images
-
-# Test a Faster R-CNN model
-python main.py --mode test --model-path ./train_runs/faster_rcnn/weights/best.pt --sample-dir ./data/visdrone/VisDrone2019-DET-val/images
-
-# Test an ensemble of models using NMS (.pt or exported formats)
-python main.py --mode test --model-path ./train_runs/yolo/weights/best.pt ./train_runs/faster_rcnn/weights/best.pt --sample-dir ./data/visdrone/VisDrone2019-DET-val/images
 ```
 
-### 5. RTMP Mode
+### Processing RTMP Streams
 
-Processes a live RTMP video stream using a single model (with tracking) or an ensemble (NMS-based detection).
+Process a live RTMP stream using a trained model:
 
 ```bash
-# Process with a single YOLO model - enables tracking IDs
-python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --output-video ./output_n.mp4
-
-# Process with a single YOLO model - tracking with "follow" commands for a specific track ID
-python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --follow-id 5
-
-# Process with a single YOLO model - real-time display of processed video feed
-python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --realtime-display
-
-# Process with a single YOLO model - real-time display with frame skipping for better performance
-python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rtmp-url rtmp://YOUR_STREAM_URL --realtime-display --max-frame-skip 10
-
-# Process with a single Faster R-CNN model - no tracking IDs
-python main.py --mode rtmp --model-path ./train_runs/faster_rcnn/weights/best.pt --rtmp-url rtmp://YOUR_STREAM_URL --output-video ./output_rcnn.mp4
-
-# Process with an ensemble of models - NMS detection, no tracking IDs, no following
-python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.pt ./train_runs/faster_rcnn/weights/best.pt --rtmp-url rtmp://YOUR_STREAM_URL --output-video ./output_ensemble.mp4
+# Process with a single YOLO model with tracking
+python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.pt --rtmp-url rtmp://YOUR_STREAM_URL --output-video ./output_yolo.mp4
 ```
 
-You can combine options like `--realtime-display` with `--output-video` to simultaneously view and save the processed feed.
+#### Target Following
+
+Enable following a specific detected object by its tracking ID:
+
+```bash
+# Follow object with tracking ID 2
+python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.pt --rtmp-url rtmp://YOUR_STREAM_URL --follow-id 2
+```
+
+#### Real-time Display
+
+Enable real-time visualization of the detection results:
+
+```bash
+# Process with real-time display
+python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.pt --rtmp-url rtmp://YOUR_STREAM_URL --realtime-display
+```
+
+### Exporting Models
+
+Export a trained PyTorch model to ONNX format for faster inference:
+
+```bash
+python main.py --mode export --model-path ./train_runs/yolo/weights/best.pt --export-format onnx
+```
 
 ## Example Workflow
 
 Here's a complete workflow example:
 
 ```bash
-# Step 1: Prepare the dataset
+# 1. Prepare the dataset
 python main.py --mode prepare --base-path ./data
 
-# Step 2: Train multiple models
-python main.py --mode train --model-type yolo --model-size n --epochs 50 --batch-size 32 --num-gpus 1 --base-path ./data --project-dir ./train_runs
-python main.py --mode train --model-type faster_rcnn --epochs 50 --batch-size 8 --num-gpus 1 --base-path ./data --project-dir ./train_runs
-# (Optionally copy best.pt from ./train_runs/yolo/weights and ./train_runs/faster_rcnn/weights to a common ./models directory)
+# 2. Train a model
+python main.py --mode train --model-type yolo --epochs 100 --batch-size 16 --num-gpus 1 --base-path ./data --project-dir ./train_runs
 
-# Step 3: Export YOLO model to ONNX
-python main.py --mode export --model-path ./train_runs/yolo/weights/best.pt --export-format onnx
+# 3. Test the trained model
+python main.py --mode test --model-path ./train_runs/yolo/weights/best.pt --base-path ./data
 
-# Step 4: Test the ensemble
-python main.py --mode test --model-path ./train_runs/yolo/weights/best.onnx ./train_runs/faster_rcnn/weights/best.pt --base-path ./data
-
-# Step 5: Process RTMP feed using the ensemble
-python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx ./train_runs/faster_rcnn/weights/best.pt --rtmp-url rtmp://192.168.1.1/live/stream
+# 4. Process an RTMP stream
+python main.py --mode rtmp --model-path ./train_runs/yolo/weights/best.onnx --rtmp-url rtmp://192.168.1.1/live/stream
 ```
 
 ## Notes
 
-- The dataset is automatically downloaded the first time you run the prepare or train modes.
-- Training with multiple GPUs requires PyTorch with CUDA support.
-- The "follow" feature generates basic movement commands that could be used to control a drone to follow a specific object. This feature outputs text that would need to be integrated with actual drone control systems.
-- The follow feature only works when using a single YOLO model. It cannot generate individual track IDs when running in ensemble mode.
-- **Object tracking is only available with YOLO models. Faster R-CNN models do not support object tracking in this implementation.**
-- Hybrid Ensemble Mode allows combining both YOLO and Faster R-CNN models for potentially improved detection results.
+- For optimal performance, ensure your GPU has sufficient VRAM for the selected model size
+- Larger models (l, x) require more memory but generally provide better detection accuracy
+- The system automatically uses CUDA if available
+- Multiple models of the same type can be used in ensemble mode for potentially improved results
 
 ## System Requirements
 
