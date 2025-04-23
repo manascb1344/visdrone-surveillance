@@ -56,40 +56,25 @@ class DataManager:
         with open(f"{self.output_path}/dataset.yaml", 'w') as f:
             yaml.dump(dataset_yaml, f, sort_keys=False)
 
-        print("Converting training set...")
-        train_imgs = glob.glob(f"{self.visdrone_path}/VisDrone2019-DET-train/images/*.jpg")
-        for img_path in tqdm(train_imgs):
-            img_name = os.path.basename(img_path)
-            img_id = os.path.splitext(img_name)[0]
+        self._convert_set("train")
+        self._convert_set("val")
 
-            shutil.copy(img_path, f"{self.output_path}/images/train/{img_name}")
-
-            img = cv2.imread(img_path)
-            img_height, img_width = img.shape[:2]
-
-            ann_path = f"{self.visdrone_path}/VisDrone2019-DET-train/annotations/{img_id}.txt"
-            out_path = f"{self.output_path}/labels/train/{img_id}.txt"
-
-            self._convert_annotation(ann_path, out_path, img_width, img_height)
-
-        print("Converting validation set...")
-        val_imgs = glob.glob(f"{self.visdrone_path}/VisDrone2019-DET-val/images/*.jpg")
-        for img_path in tqdm(val_imgs):
-            img_name = os.path.basename(img_path)
-            img_id = os.path.splitext(img_name)[0]
-
-            shutil.copy(img_path, f"{self.output_path}/images/val/{img_name}")
-
-            img = cv2.imread(img_path)
-            img_height, img_width = img.shape[:2]
-
-            ann_path = f"{self.visdrone_path}/VisDrone2019-DET-val/annotations/{img_id}.txt"
-            out_path = f"{self.output_path}/labels/val/{img_id}.txt"
-
-            self._convert_annotation(ann_path, out_path, img_width, img_height)
-
-        print(f"Conversion complete. Dataset stored in {self.output_path}")
         return f"{self.output_path}/dataset.yaml"
+    
+    def _convert_set(self, set_type):
+        imgs = glob.glob(f"{self.visdrone_path}/VisDrone2019-DET-{set_type}/images/*.jpg")
+        for img_path in tqdm(imgs):
+            img_name = os.path.basename(img_path)
+            img_id = os.path.splitext(img_name)[0]
+
+            shutil.copy(img_path, f"{self.output_path}/images/{set_type}/{img_name}")
+
+            img = cv2.imread(img_path)
+            img_height, img_width = img.shape[:2]
+
+            ann_path = f"{self.visdrone_path}/VisDrone2019-DET-{set_type}/annotations/{img_id}.txt"
+            out_path = f"{self.output_path}/labels/{set_type}/{img_id}.txt"
+            self._convert_annotation(ann_path, out_path, img_width, img_height)
 
     def _convert_annotation(self, ann_path, out_path, img_width, img_height):
         try:
@@ -124,4 +109,4 @@ class DataManager:
                     yolo_class = self.visdrone_to_yolo[cls]
                     f.write(f"{yolo_class} {yolo_x:.6f} {yolo_y:.6f} {yolo_width:.6f} {yolo_height:.6f}\n")
         except Exception as e:
-            print(f"Error processing {ann_path}: {e}") 
+            pass

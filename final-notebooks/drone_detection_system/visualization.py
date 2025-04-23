@@ -9,24 +9,27 @@ from IPython.display import display, Image
 import itertools
 
 class Visualizer:
-
     def __init__(self, class_names=None):
-        self.class_names = class_names or [
-            'person', 'bicycle', 'car', 'van',
-            'truck', 'tricycle', 'bus', 'motorcycle'
-        ]
+        if class_names is None:
+            self.class_names = [
+                'person', 'bicycle', 'car', 'van',
+                'truck', 'tricycle', 'bus', 'motorcycle'
+            ]
+        else:
+            self.class_names = class_names
 
+        # Base colors for visualization
         self.base_colors = [
-            (0, 255, 0),
-            (255, 0, 0),
-            (0, 0, 255),
-            (255, 255, 0),
-            (255, 0, 255),
-            (0, 255, 255),
-            (255, 165, 0),
-            (128, 0, 128),
-            (0, 128, 128),
-            (128, 128, 0),
+            (0, 255, 0),    # Green
+            (255, 0, 0),    # Blue
+            (0, 0, 255),    # Red
+            (255, 255, 0),  # Cyan
+            (255, 0, 255),  # Magenta
+            (0, 255, 255),  # Yellow
+            (255, 165, 0),  # Orange
+            (128, 0, 128),  # Purple
+            (0, 128, 128),  # Teal
+            (128, 128, 0),  # Olive
         ]
 
     def visualize_training_results(self, results_path):
@@ -80,29 +83,23 @@ class Visualizer:
 
         models = []
         model_names = []
-        for model_path in model_path:
+        for path in model_path:
             try:
-                models.append(YOLO(model_path))
-                model_names.append(os.path.splitext(os.path.basename(model_path))[0])
+                models.append(YOLO(path))
+                model_names.append(os.path.splitext(os.path.basename(path))[0])
             except Exception as e:
-                print(f"Error loading model {model_path}: {e}")
+                print(f"Error loading model {path}: {e}")
 
         if not models:
             print("No models were loaded successfully.")
             return False
 
-        ensemble_colors = list(itertools.islice(itertools.cycle(self.base_colors), len(models)))
+        ensemble_colors = []
+        color_cycle = itertools.cycle(self.base_colors)
+        for _ in range(len(models)):
+            ensemble_colors.append(next(color_cycle))
 
-        all_images = []
-        for ext in ['*.jpg', '*.jpeg', '*.png']:
-            try:
-                all_images.extend([f for f in os.listdir(sample_dir)
-                                   if os.path.isfile(os.path.join(sample_dir, f)) and
-                                      f.lower().endswith(ext.replace('*', ''))])
-            except FileNotFoundError:
-                 print(f"Error: Sample directory not found: {sample_dir}")
-                 return False
-
+        all_images = self._get_images_from_directory(sample_dir)
         if not all_images:
             print(f"No images found in {sample_dir}")
             return False
@@ -133,40 +130,7 @@ class Visualizer:
                 model_name = model_names[model_idx]
                 color = ensemble_colors[model_idx]
 
-                try:
-                    results = model(img_path, conf=conf_threshold, verbose=False)
-                    boxes = results[0].boxes
-                    
-                    # Debug print
-                    print(f"  Model {model_name} detected {len(boxes.xyxy) if hasattr(boxes, 'xyxy') else 0} boxes")
-
-                    if hasattr(boxes, 'xyxy') and len(boxes.xyxy) > 0:
-                        for j in range(len(boxes.xyxy)):
-                            try:
-                                xyxy = boxes.xyxy[j].cpu().numpy().astype(int)
-                                conf = boxes.conf[j].cpu().numpy() if hasattr(boxes, 'conf') else 0.0
-                                cls = int(boxes.cls[j].cpu().numpy()) if hasattr(boxes, 'cls') else 0
-                                
-                                x1, y1, x2, y2 = xyxy
-                                
-                                # Ensure valid box coordinates
-                                if x1 >= 0 and y1 >= 0 and x2 > x1 and y2 > y1:
-                                    class_name = self.class_names[cls] if cls < len(self.class_names) else f"CLS {cls}"
-                                    label = f'{model_name}: {class_name} {conf:.2f}'
-                                    
-                                    # Use thicker lines for better visibility
-                                    cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, 2)
-                                    
-                                    (label_width, label_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                                    cv2.rectangle(vis_img, (x1, y1 - label_height - baseline), (x1 + label_width, y1), color, -1)
-                                    cv2.putText(vis_img, label, (x1, y1 - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1)
-                            except Exception as e:
-                                print(f"  Error processing box {j}: {e}")
-                    else:
-                        print(f"  Model {model_name} found no boxes above threshold {conf_threshold}")
-
-                except Exception as e:
-                    print(f"  Error during inference with model {model_name} on {img_name}: {e}")
+                self._process_image_with_model(img_path, vis_img, model, model_name, color, conf_threshold)
 
             plt.subplot(num_images_to_show, 1, i + 1)
             plt.imshow(cv2.cvtColor(vis_img, cv2.COLOR_BGR2RGB))
@@ -177,3 +141,85 @@ class Visualizer:
         plt.show()
 
         return True
+    def _get_images_from_directory(self, directory):
+        all_images = []
+        image_extensions = ['*.jpg', '*.jpeg', '*.png']
+        
+        for ext in image_extensions:
+            try:
+                clean_ext = ext.replace('*', '')
+                
+                for f in os.listdir(directory):
+                    file_path = os.path.join(directory, f)
+                    if os.path.isfile(file_path) and f.lower().endswith(clean_ext):
+                        all_images.append(f)
+            except FileNotFoundError:
+                print(f"Error: Sample directory not found: {directory}")
+                return []
+                
+        return all_images
+    
+    def _process_image_with_model(self, img_path, vis_img, model, model_name, color, conf_threshold):
+        try:
+            results = model(img_path, conf=conf_threshold, verbose=False)
+            boxes = results[0].boxes
+            
+            if not hasattr(boxes, 'xyxy') or len(boxes.xyxy) == 0:
+                print(f"  Model {model_name} found no boxes above threshold {conf_threshold}")
+                return
+                
+            print(f"  Model {model_name} detected {len(boxes.xyxy)} boxes")
+            
+            for j in range(len(boxes.xyxy)):
+                try:
+                    xyxy = boxes.xyxy[j].cpu().numpy().astype(int)
+                    
+                    if hasattr(boxes, 'conf'):
+                        conf = boxes.conf[j].cpu().numpy()
+                    else:
+                        conf = 0.0
+                    
+                    if hasattr(boxes, 'cls'):
+                        cls = int(boxes.cls[j].cpu().numpy())
+                    else:
+                        cls = 0
+                    
+                    x1, y1, x2, y2 = xyxy
+                    
+                    if x1 >= 0 and y1 >= 0 and x2 > x1 and y2 > y1:
+                        if cls < len(self.class_names):
+                            class_name = self.class_names[cls]
+                        else:
+                            class_name = f"CLS {cls}"
+                            
+                        label = f'{model_name}: {class_name} {conf:.2f}'
+                        
+                        cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, 2)
+                        
+                        text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                        label_width = text_size[0][0]
+                        label_height = text_size[0][1]
+                        baseline = text_size[1]
+                        
+                        cv2.rectangle(
+                            vis_img, 
+                            (x1, y1 - label_height - baseline), 
+                            (x1 + label_width, y1), 
+                            color, 
+                            -1
+                        )
+                        
+                        cv2.putText(
+                            vis_img, 
+                            label, 
+                            (x1, y1 - baseline), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 
+                            0.5, 
+                            (0, 0, 0), 
+                            1
+                        )
+                except Exception as e:
+                    print(f"  Error processing box {j}: {e}")
+                    
+        except Exception as e:
+            print(f"  Error during inference with model {model_name}: {e}")
