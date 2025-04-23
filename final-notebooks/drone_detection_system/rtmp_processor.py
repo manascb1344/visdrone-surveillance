@@ -60,7 +60,7 @@ class RTMPProcessor:
                         
     def process_feed(self, rtmp_url, output_path=None, confidence_threshold=0.25, 
                     max_frames=300, nms_iou_threshold=0.5, follow_target_id=None, 
-                    realtime_display=False, max_frame_skip=5):
+                    realtime_display=False, max_frame_skip=10):
         if not self.models:
             return None
             
@@ -108,8 +108,17 @@ class RTMPProcessor:
             
             last_process_time = time.time()
             process_times = []
+            
+            if realtime_display:
+                for _ in range(5):
+                    ret, _ = cap.read()
+                    if not ret:
+                        break
 
             while cap.isOpened() and (frame_count < max_frames or realtime_display or (process_all_frames and output_path)):
+                current_time = time.time()
+                time_since_last_process = current_time - last_process_time
+                
                 if realtime_display and not output_path and len(process_times) > 0:
                     avg_process_time = sum(process_times) / len(process_times)
                     
@@ -119,7 +128,19 @@ class RTMPProcessor:
                         frame_interval = 0.033
                     
                     if avg_process_time > frame_interval:
-                        skip_count = min(int(avg_process_time / frame_interval), max_frame_skip)
+                        skip_count = min(int(avg_process_time / frame_interval * 1.5), max_frame_skip)
+                        
+                        for _ in range(skip_count):
+                            ret, _ = cap.read()
+                            if not ret:
+                                break
+                            frame_count += 1
+                            skipped_frames += 1
+                    
+                    elif time_since_last_process > frame_interval * 2:
+                        skip_needed = int(time_since_last_process / frame_interval) - 1
+                        skip_count = min(skip_needed, max_frame_skip)
+                        
                         for _ in range(skip_count):
                             ret, _ = cap.read()
                             if not ret:
@@ -429,6 +450,12 @@ class RTMPProcessor:
             if realtime_display:
                 cap = cv2.VideoCapture(rtmp_url)
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('H', '2', '6', '4'))
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                
+                for _ in range(3):
+                    cap.grab()
             else:
                 temp_file = "/tmp/rtmp_temp.mp4"
                 ffmpeg_command = f"ffmpeg -hide_banner -loglevel error -y -i {rtmp_url} -vsync 0 -c copy {temp_file}"
@@ -464,7 +491,7 @@ class RTMPProcessor:
             all_pred_labels = []
             
             for model in self.models:
-                results = model.predict(frame, conf=confidence_threshold)
+                results = model.track(frame, persist=True, conf=confidence_threshold)
                 
                 if results and len(results) > 0:
                     if hasattr(results[0], 'boxes') and results[0].boxes is not None:
