@@ -1,6 +1,6 @@
 # VisDrone surveillance
 
-[![CI](https://github.com/manascb1344/ml-proj-man/actions/workflows/ci.yml/badge.svg)](https://github.com/manascb1344/ml-proj-man/actions/workflows/ci.yml)
+[![CI](https://github.com/manascb1344/visdrone-surveillance/actions/workflows/ci.yml/badge.svg)](https://github.com/manascb1344/visdrone-surveillance/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 

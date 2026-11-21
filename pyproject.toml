@@ -53,10 +53,10 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/manascb1344/ml-proj-man"
-Repository = "https://github.com/manascb1344/ml-proj-man"
-Issues = "https://github.com/manascb1344/ml-proj-man/issues"
-Documentation = "https://github.com/manascb1344/ml-proj-man/tree/master/docs"
+Homepage = "https://github.com/manascb1344/visdrone-surveillance"
+Repository = "https://github.com/manascb1344/visdrone-surveillance"
+Issues = "https://github.com/manascb1344/visdrone-surveillance/issues"
+Documentation = "https://github.com/manascb1344/visdrone-surveillance/tree/main/docs"
 
 [tool.setuptools]
 package-dir = {"" = "main"}
