@@ -1,108 +1,109 @@
-# VisDrone-RTMP: Real-Time Drone Object Detection System
+# VisDrone surveillance
 
-A real-time object detection system for drone video feeds using the VisDrone dataset, optimized for aerial imagery.
+Aerial object detection and surveillance built on the VisDrone dataset, with
+RTMP streaming, a police surveillance pipeline, and an autonomous
+vehicle-following demo. This repository is the canonical home of the project.
 
-## Overview
+## What it does
 
-This project implements a system for performing real-time object detection on live video feeds from drones via RTMP streaming. The system is designed to identify and track objects of interest (primarily vehicles and people) from aerial perspectives.
+- **Detection.** Two families: a Faster R-CNN (ResNet-50 FPN) detector trained
+  on VisDrone VID, and a YOLOv8 detector trained on VisDrone YOLO. Both are
+  selectable at runtime.
+- **Streaming.** RTMP ingestion with reconnect, buffering, and statistics.
+- **Surveillance.** ALPR, vehicle classification and identification,
+  multi-camera tracking, and speed estimation, wired into one pipeline.
+- **Autonomous follow.** Pick a vehicle in the feed and a simulated drone
+  tracks and follows it using a single-target tracker and PID guidance.
+  The loop runs offline and deterministically.
 
-The project utilizes the VisDrone dataset for training and implements two different object detection models:
-- A single-stage detector (YOLO-based)
-- A two-stage detector (Faster R-CNN-based)
+## Team members
 
-## Key Features
+1. Aarya Bodas
+2. Manas Bavaskar
 
-- Download and preprocess the VisDrone dataset specifically for aerial object detection
-- Implement data augmentation techniques specialized for aerial imagery
-- Train two different object detection models (YOLO and Faster R-CNN) on the VisDrone dataset
-- Ingest and decode RTMP video streams from drones in real-time
-- Perform real-time object detection on incoming video frames
-- Visualize detection results by drawing bounding boxes and labels
-- Compare performance metrics between different model architectures
+## Repository layout
 
-## Getting Started
+| Path | What lives there |
+| --- | --- |
+| `main/visdrone_surveillance/` | The supported package. All tested, maintained code. |
+| `tests/` | The test suite that pins package behavior. |
+| `docs/` | Architecture and project status. |
+| `research/` | Prototypes, notebooks, and experiment artifacts. Not part of the package. |
+| `configs/` | Dataset and training configuration files. |
+| `scripts/` | Operational helpers. |
+| `data/`, `models/`, `outputs/` | Runtime data, weights, and outputs. Gitignored. |
 
-### Prerequisites
+## Install
 
-- Python 3.8+
-- CUDA-compatible GPU (recommended)
-- FFmpeg installed
+You need Python 3.8 or newer. FFmpeg is required for streaming features.
 
-### Installation
-
-1. Clone this repository:
-   ```
-   git clone https://github.com/yourusername/visdrone-rtmp.git
-   cd visdrone-rtmp
-   ```
-
-2. Create a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-4. Download the VisDrone dataset (instructions in the documentation)
-
-## Project Structure
-
+```bash
+pip install -e ".[test]"
 ```
-visdrone-rtmp/
-├── data/                  # Data directory (created on first run)
-│   ├── raw/               # Raw VisDrone dataset
-│   └── processed/         # Processed dataset
-├── models/                # Model implementations
-│   ├── yolo/              # YOLO-based model
-│   └── faster_rcnn/       # Faster R-CNN model
-├── src/
-│   ├── data/              # Data processing utilities
-│   ├── stream/            # RTMP stream handling
-│   ├── detection/         # Object detection modules
-│   └── visualization/     # Visualization utilities
-├── notebooks/             # Jupyter notebooks for experimentation
-├── tests/                 # Unit and integration tests
-├── scripts/               # Utility scripts
-└── output/                # For saving model outputs
+
+Or with uv:
+
+```bash
+uv pip install --python .venv/bin/python -e ".[test]"
 ```
+
+Copy `.env.example` to `.env` if you want to override settings, or set
+environment variables directly. The package reads `config.py`, with overrides
+for `VISDRONE_DATASET_ROOT`, `VISDRONE_YOLO_ROOT`, `RTMP_SERVER`,
+`RTMP_STREAM_KEY`, `CONFIDENCE_THRESHOLD`, and `NMS_THRESHOLD`.
 
 ## Usage
 
-1. Process the VisDrone dataset:
-   ```
-   python scripts/process_dataset.py
-   ```
+```bash
+# Train the Faster R-CNN detector
+visdrone-surveil train --batch_size 8 --learning_rate 0.001 --num_epochs 20
 
-2. Train models:
-   ```
-   python scripts/train.py --model yolo  # or faster_rcnn
-   ```
+# Train a YOLO model
+visdrone-surveil train-yolo --config configs/visdrone.yaml --epochs 100
 
-3. Run real-time detection on RTMP stream:
-   ```
-   python scripts/detect_rtmp.py --model yolo --rtmp-url rtmp://example.com/live/stream
-   ```
+# Run detection over a video file
+visdrone-surveil rtmp-demo --model_path outputs/<run>/model_epoch_9.pth --input_video video.mp4
+
+# Run the surveillance pipeline
+visdrone-surveil surveil --video video.mp4 --output outputs/tracked.mp4
+
+# Run the autonomous follow demo in simulation
+visdrone-surveil follow --steps 150 --seed 7 --output outputs/follow_demo.mp4
+```
+
+Run `visdrone-surveil <command> --help` for every flag.
+
+## Dataset
+
+Training expects either the VisDrone2019-VID layout (Faster R-CNN) or the
+VisDrone-YOLO layout (YOLO):
+
+```text
+VisDrone2019-VID-train/          # VID format
+├── sequences/
+└── annotations/
+
+datasets/VisDrone-YOLO/           # YOLO format
+├── train/images, train/labels
+└── val/images, val/labels
+```
+
+## Testing
+
+```bash
+python -m pytest tests/ -q
+```
+
+The suite is offline. It needs no GPU, no dataset, and no network. A few
+tests are marked `xfail` and name known bugs.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Project status](docs/project-status.md)
+- [VisDrone monitoring PRD](docs/visdrone-monitoring-prd.md)
+- [Research index](research/README.md)
 
 ## License
 
-[MIT License](LICENSE)
-
-## Acknowledgments
-
-- [VisDrone Dataset](https://github.com/VisDrone/VisDrone-Dataset)
-- [YOLOv8](https://github.com/ultralytics/ultralytics)
-- [Detectron2](https://github.com/facebookresearch/detectron2)
-
-
-
-```
-docker run -d \
-  --name nginx-rtmp \
-  -p 1935:1935 \
-  -p 8080:80 \
-  alfg/nginx-rtmp
-```
+MIT. See `LICENSE` for details.

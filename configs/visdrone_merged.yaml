@@ -34,8 +34,9 @@ names:
   7: awning-tricycle
   8: bus
   9: motor
-nbs: 64
-nc: 10
+  10: others
+nb: 64
+nc: 11
 path: datasets/VisDrone-YOLO
 patience: 50
 perspective: 0.0

@@ -1,0 +1,20 @@
+{
+  "enable_alpr": true,
+  "enable_classification": true,
+  "enable_tracking": true,
+  "enable_speed_estimation": true,
+  "alpr_confidence": 0.5,
+  "classification_confidence": 0.5,
+  "identification_similarity": 0.7,
+  "max_track_points": 100,
+  "track_timeout": 60.0,
+  "max_tracks": 1000,
+  "pixels_per_meter": 30.0,
+  "speed_limit_mph": 70.0,
+  "min_track_points": 5,
+  "max_speed_mph": 150.0,
+  "speed_smoothing_window": 3,
+  "calibration_path": "speed_calibration.json",
+  "reference_vehicle_length": 4.5,
+  "min_calibration_detections": 20
+}

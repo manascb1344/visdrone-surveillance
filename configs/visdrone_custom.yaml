@@ -1,6 +1,6 @@
 # VisDrone custom configuration for YOLOv8
 # path: /content/datasets/VisDrone-YOLO  # dataset root directory (absolute path)
-path: /home/user/ml-proj-man/datasets/VisDrone-YOLO
+path: datasets/VisDrone-YOLO
 train: images/train  # train images relative to path
 val: images/val  # val images relative to path
 test: images/test  # test images relative to path

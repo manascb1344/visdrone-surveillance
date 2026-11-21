@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "visdrone-surveillance"
+version = "0.3.0"
+description = "VisDrone surveillance ML project: object detection, RTMP streaming, and autonomous drone vehicle-following"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=1.9.0",
+    "torchvision>=0.10.0",
+    "ultralytics>=8.0.0",
+    "opencv-python>=4.5.0",
+    "numpy>=1.19.0",
+    "matplotlib>=3.3.0",
+    "tqdm>=4.48.0",
+    "albumentations>=0.5.2",
+    "pyyaml>=6.0",
+    "scipy>=1.7.0",
+    "scikit-learn>=1.0.0",
+    "pillow>=8.0.0",
+    "av>=9.0.0",
+    "ffmpeg-python>=0.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "isort",
+]
+test = [
+    "pytest>=6.0.0",
+]
+
+[project.scripts]
+visdrone-surveil = "visdrone_surveillance.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "main"}
+
+[tool.setuptools.packages.find]
+where = ["main"]
+include = ["visdrone_surveillance*"]
