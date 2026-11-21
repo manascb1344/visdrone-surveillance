@@ -16,8 +16,10 @@ code covered by the test suite and packaging.
 | `nia194-object-detection.txt` | `research/notes/nia194-object-detection.txt` | Large text artifact related to object detection. |
 | `visdrone_monitoring_prd.md` | `docs/visdrone-monitoring-prd.md` | Product requirements document (moved to docs). |
 
-`research/experiments/`, `research/notebooks/`, and `research/notes/` hold
-experiment artifacts, notebooks, and notes respectively.
+`research/experiments/` holds run outputs, metrics, and manifests.
+`research/notebooks/` holds Jupyter notebooks and the `final-notebooks/` system.
+`research/notes/` holds planning notes and the pre-rewrite commit SHA.
+`research/prototypes/` holds unmaintained demo scripts.
 
 ## Maintenance status
 

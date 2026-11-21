@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "VisDrone Surveillance"
+authors:
+  - family-names: "Bodas"
+    given-names: "Aarya"
+  - family-names: "Bavaskar"
+    given-names: "Manas"
+license: MIT
+repository-code: "https://github.com/manascb1344/ml-proj-man"
+keywords:
+  - object detection
+  - visdrone
+  - rtmp
+  - surveillance
+  - drone
+  - autonomous following
+  - computer vision

@@ -97,7 +97,8 @@ coverage.xml
 
 datasets/
 
-!src/data/
 
-final-notebooks/drone_detection_system/visdrone/
-final-notebooks/drone_detection_system/visdrone_yolo/
+.cursorignore
+
+# Research experiment artifacts (large, not tracked)
+research/experiments/

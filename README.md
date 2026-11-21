@@ -1,5 +1,9 @@
 # VisDrone surveillance
 
+[![CI](https://github.com/manascb1344/ml-proj-man/actions/workflows/ci.yml/badge.svg)](https://github.com/manascb1344/ml-proj-man/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
 Aerial object detection and surveillance built on the VisDrone dataset, with
 RTMP streaming, a police surveillance pipeline, and an autonomous
 vehicle-following demo. This repository is the canonical home of the project.
@@ -103,6 +107,10 @@ tests are marked `xfail` and name known bugs.
 - [Project status](docs/project-status.md)
 - [VisDrone monitoring PRD](docs/visdrone-monitoring-prd.md)
 - [Research index](research/README.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and pull request guidelines.
 
 ## License
 
