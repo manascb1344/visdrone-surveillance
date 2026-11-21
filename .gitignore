@@ -70,7 +70,8 @@ tasks/
 
 # Project specific
 # Ignore dataset files (they are large and should be downloaded separately)
-data/
+/data/
+/datasets/
 *.mp4
 *.avi
 *.mov

@@ -5,7 +5,7 @@ This page is the maturity record for the 2026-11 restructure. Update it when a
 row's status changes.
 
 The test suite under `tests/` pins the behavior of the rows marked **Implemented**
-and **Promoted**. One test is marked `xfail` and names the tracking bug below.
+and **Promoted**. Three tests are marked `xfail(strict=True)` and name real bugs: the camera transition crash, the reconnections stat, and `get_latest_frame` consuming the buffer. All three are documented below.
 
 ## Status by area
 
@@ -27,7 +27,7 @@ and **Promoted**. One test is marked `xfail` and names the tracking bug below.
 | Autonomous follow, tracking | `follow/` | Implemented | Click selection and single-target tracker with constant-velocity prediction and coasting. Covered by tests. |
 | Autonomous follow, guidance | `control/` | Implemented | PID guidance on center offset and target scale, plus a lock, follow, reacquire, lost state machine. Covered by tests. |
 | Autonomous follow, hardware bridge | `control/` (planned) | Not started | DJI Tello adapter not yet written. The command interface is ready for it. |
-| Command line | `cli.py` | Implemented | `visdrone-surveil train`, `rtmp-demo`, and `surveil` replace the old `run.py` and `run_police_surveillance.py`. Covered by smoke tests. |
+| Command line | `cli.py` | Implemented | `visdrone-surveil train`, `train-yolo`, `rtmp-demo`, `follow`, and `surveil`. Replaces the old `run.py` and `run_police_surveillance.py`. Covered by smoke tests. |
 
 ## Known bugs
 

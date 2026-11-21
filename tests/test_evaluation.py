@@ -1,4 +1,4 @@
-"""Pin the behavior of metrics helpers in ``src/utils/evaluation.py``."""
+"""Pin the behavior of metrics helpers in ``visdrone_surveillance.utils.evaluation``."""
 
 import os
 import sys

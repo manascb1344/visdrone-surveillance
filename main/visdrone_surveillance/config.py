@@ -41,7 +41,7 @@ VALIDATION_SPLIT = 0.2
 SEED = 42
 
 # Model parameters
-NUM_CLASSES = 10  # Number of object categories in VisDrone (stale; len(CLASSES) is 12)
+NUM_CLASSES = 10  # DEPRECATED: stale; len(CLASSES) is 12 and is what model construction uses. Do not reference this constant.
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
 NMS_THRESHOLD = float(os.getenv("NMS_THRESHOLD", "0.4"))
 

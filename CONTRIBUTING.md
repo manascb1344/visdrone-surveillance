@@ -6,8 +6,8 @@ every change.
 ## Setup
 
 ```bash
-git clone https://github.com/manascb1344/ml-proj-man.git
-cd ml-proj-man
+git clone https://github.com/manascb1344/visdrone-surveillance.git
+cd visdrone-surveillance
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[test]"

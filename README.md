@@ -45,6 +45,12 @@ You need Python 3.8 or newer. FFmpeg is required for streaming features.
 pip install -e ".[test]"
 ```
 
+Or without editable mode:
+
+```bash
+pip install ".[test]"
+```
+
 Or with uv:
 
 ```bash

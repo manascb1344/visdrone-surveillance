@@ -3,18 +3,15 @@
 This page explains how the package fits together and why the repository is
 split the way it is. For per-area maturity, see [Project status](project-status.md).
 
-## Two repositories, one package
+## Repository layout
 
 Everything the project supports lives in `main/visdrone_surveillance/`. The
-`research/` directory holds prototypes, notes, and the `ml-proj-man` reference
-repo. That split exists so a reader can tell maintained code from experiments
-at a glance, and so the test suite and the packaging describe exactly one
-codebase.
+`research/` directory holds prototypes, notebooks, and experiment artifacts.
+That split exists so a reader can tell maintained code from experiments at a
+glance, and so the test suite and the packaging describe exactly one codebase.
 
-`research/ml-proj-man/` stays a separate git repository with its own history
-and about 2G of model weights. Those weights and history are never imported
-into this repo. Two files from its RTMP stack were promoted into the package
-and the rest stays there untouched.
+`research/` is not part of the package. Nothing under it is imported by
+`visdrone_surveillance` and nothing in it is tested.
 
 ## Package map
 

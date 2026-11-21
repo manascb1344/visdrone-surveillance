@@ -7,7 +7,7 @@ authors:
   - family-names: "Bavaskar"
     given-names: "Manas"
 license: MIT
-repository-code: "https://github.com/manascb1344/ml-proj-man"
+repository-code: "https://github.com/manascb1344/visdrone-surveillance"
 keywords:
   - object detection
   - visdrone

@@ -35,7 +35,7 @@ try:
     import cv2
 except ImportError as e:
     print(f"Error importing dependencies: {e}")
-    print("Please run setup script first: python src/models/yolo_setup.py")
+    print("Please run setup script first: python -m visdrone_surveillance.models.yolo_setup")
     sys.exit(1)
 
 from ..models.yolo_config import YOLOConfig

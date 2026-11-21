@@ -2,9 +2,12 @@
 
 ## Reporting a vulnerability
 
-If you find a security issue, please do not open a public issue. Email the
-maintainer at the address in the commit history, or open a private security
-advisory on GitHub.
+If you find a security issue, please do not open a public issue. Use
+GitHub's private vulnerability reporting:
+
+https://github.com/manascb1344/visdrone-surveillance/security/advisories/new
+
+Alternatively, contact the maintainer through their GitHub profile.
 
 ## Scope
 
